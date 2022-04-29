@@ -1,0 +1,6 @@
+# Path to the local samples
+background: '/eos/project/d/dshep/TOPCLASS/L1jetLepData/cocktail_0.66invfb.h5'
+leptoquarks: '/eos/project/d/dshep/TOPCLASS/L1jetLepData/leptoquark_LOWMASS_lepFilter_13TeV/leptoquark_LOWMASS_lepFilter_13TeV.h5'
+ato4l: '/eos/project/d/dshep/TOPCLASS/L1jetLepData/Ato4l_lepFilter_13TeV/Ato4l_lepFilter_13TeV.h5'
+hChToTauNu: '/eos/project/d/dshep/L1anomaly_DELPHES/hChToTauNu_13TeV_PU20.h5'
+hToTauTau: '/eos/project/d/dshep/L1anomaly_DELPHES/hToTauTau_13TeV_PU20.h5'

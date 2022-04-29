@@ -13,7 +13,7 @@ import pickle
 import setGPU
 
 from models import student
-from plotting.plotting import reco_loss
+from plotting import reco_loss
 
 def knowledge_distillation(teacher_input_h5, teacher_input_json,
     output_model_h5, output_model_json, output_history, batch_size, n_epochs,
