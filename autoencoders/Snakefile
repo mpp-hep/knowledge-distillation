@@ -1,0 +1,27 @@
+configfile: 'config.yaml'
+
+rule kd_train:
+    input:
+        teacher_json = '/afs/cern.ch/user/e/egovorko/eos/paper_output/model-conv_ae-8-b0-q0-not_pruned.json',
+        teacher_h5 = '/afs/cern.ch/user/e/egovorko/eos/paper_output/model-conv_ae-8-b0-q0-not_pruned.h5'
+    output:
+        h5 = 'output/student_model.h5',
+        json = 'output/student_model.json',
+        result = '/eos/cms/store/cmst3/user/egovorko/output/student_result.h5'
+    shell:
+        'python knowledge_distillation.py --teacher-input-json {input.teacher_json} \
+                                          --teacher-input-h5 {input.teacher_h5} \
+                                          --output-model-h5 {output.h5} \
+                                          --output-model-json {output.json} \
+                                          --batch-size 1024 \
+                                          --n-epochs 100 \
+                                          --output-result {output.result}'
+
+
+rule kd_plot:
+    input:
+        student = '/eos/cms/store/cmst3/user/egovorko/output/student_result.h5',
+        teacher = '/eos/cms/store/cmst3/user/egovorko/paper_output/result-conv_ae-8-b0-q0-not_pruned.h5'
+    shell:
+        'python plot_results.py --student {input.student} \
+                                --teacher {input.teacher}'
