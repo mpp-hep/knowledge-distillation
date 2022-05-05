@@ -132,3 +132,5 @@ dmypy.json
 # Local
 plots/
 output/
+*.snakemake*
+*DS_Store

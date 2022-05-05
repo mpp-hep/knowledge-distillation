@@ -13,36 +13,19 @@ import pickle
 import setGPU
 
 from models import student
-from plotting import reco_loss
+from plot_results import reco_loss, BSM_SAMPLES
 
-def knowledge_distillation(teacher_input_h5, teacher_input_json,
-    output_model_h5, output_model_json, output_history, batch_size, n_epochs,
-    output_result):
-    # magic trick to make sure that Lambda function works
-    tf.compat.v1.disable_eager_execution()
+def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
+    data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
+    output_history, batch_size, n_epochs, output_result):
 
-    from tensorflow.compat.v1 import ConfigProto
-    from tensorflow.compat.v1 import InteractiveSession
-    config = ConfigProto()
-    config.gpu_options.allow_growth = True
-    session = InteractiveSession(config=config)
-
-    # load data
-    with open('output/data_-1.pickle', 'rb') as f:
-        x_train, y_train, x_test, y_test, all_bsm_data, pt_scaler = pickle.load(f)
-
-    # load teacher model
-    with open(teacher_input_json, 'r') as jsonfile:
-        config = jsonfile.read()
-    teacher_model = tf.keras.models.model_from_json(config,
-        custom_objects={'PruneLowMagnitude': pruning_wrapper.PruneLowMagnitude,
-            'QDense': QDense, 'QConv2D': QConv2D, 'QActivation': QActivation})
-    teacher_model.load_weights(teacher_input_h5)
-    teacher_model.summary()
+    # load teacher's loss for training
+    with h5py.File(input_train_file, 'r') as f:
+        x_train = np.array(f[data_name][:,:,:n_features])
+        y_train = np.array(f[teacher_loss_name])
 
     # student model
-    image_shape = (x_train.shape[0], 19, 3, 1)
-    student_model = student(image_shape)
+    student_model = student(x_train.shape)
 
     # define callbacks
     callbacks=[
@@ -50,16 +33,13 @@ def knowledge_distillation(teacher_input_h5, teacher_input_json,
         ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1)
         ]
 
-    y_teacher = reco_loss(y_train, teacher_model.predict(x_train))
-    # train
-    history = student_model.fit(x=x_train, y=y_teacher,
+    # train student to reproduce teachers' loss
+    history = student_model.fit(x=x_train, y=y_train,
         epochs=n_epochs,
         batch_size=batch_size,
         verbose=2,
         validation_split=0.2,
         callbacks=callbacks)
-
-    # history = None
 
 
     # save student model
@@ -73,21 +53,30 @@ def knowledge_distillation(teacher_input_h5, teacher_input_json,
         with open(output_history, 'wb') as handle:
             pickle.dump(history.history, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+    # load testing set
+    with h5py.File(input_test_file, 'r') as f:
+        x_test = np.array(f[data_name][:,:,:n_features])
+
     # get prediction
     predicted_loss = student_model.predict(x_test)
 
-    # test model on BSM data
-    result_bsm = []
-    for i, bsm_data_name in enumerate(['Leptoquark', 'A to 4 leptons', 'hChToTauNu', 'hToTauTau']):
-        bsm_data = all_bsm_data[i]
-        predicted_bsm_data = student_model.predict(bsm_data)
-        result_bsm.append([bsm_data_name, predicted_bsm_data])
+    # load testing BSM samples
+    with h5py.File(input_signal_file, 'r') as f:
+        # only for Graph
+        PID = np.array(f['ProcessID']) if 'ProcessID' in f.keys() else None
+        all_bsm_data = f[data_name][:,:,:n_features] if PID is not None else None
+        # test model on BSM data
+        result_bsm = []
+        for bsm_data_name, bsm_id in zip(BSM_SAMPLES, [33,30,31,32]):
+            bsm_data = all_bsm_data[PID[:,0]==bsm_id] if PID is not None \
+                else np.array(f[f'bsm_data_{bsm_data_name}'][:,:,:n_features])
+            predicted_bsm_data = student_model.predict(bsm_data)
+            result_bsm.append([bsm_data_name, predicted_bsm_data])
 
-    #Save results
+    # save results
     with h5py.File(output_result, 'w') as h5f:
         if history: h5f.create_dataset('loss', data=history.history['loss'])
         if history: h5f.create_dataset('val_loss', data=history.history['val_loss'])
-        h5f.create_dataset('QCD', data=y_test)
         h5f.create_dataset('predicted_loss', data=predicted_loss)
         for bsm in result_bsm:
             h5f.create_dataset(f'predicted_loss_{bsm[0]}', data=bsm[1])
@@ -95,8 +84,12 @@ def knowledge_distillation(teacher_input_h5, teacher_input_json,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--teacher-input-h5', type=str, help='Where is the model')
-    parser.add_argument('--teacher-input-json', type=str, help='Where is the model')
+    parser.add_argument('--input-train-file', type=str, help='Evaluated Teacher on train set')
+    parser.add_argument('--input-test-file', type=str, help='Evaluated Teacher on test set')
+    parser.add_argument('--input-signal-file', type=str, help='Evaluated Teacher on signals set')
+    parser.add_argument('--data-name', type=str, help='Name of the data in the input h5')
+    parser.add_argument('--n-features', type=int, default=3, help='First N features to train on')
+    parser.add_argument('--teacher-loss_name', type=str, default='teacher_loss', help='Name of the loss dataset in the h5')
     parser.add_argument('--output-model-h5', type=str, help='Output file with the model', required=True)
     parser.add_argument('--output-model-json', type=str, help='Output file with the model', required=True)
     parser.add_argument('--output-history', type=str, help='Output file with the model training history', default='output/student_history.pickle')

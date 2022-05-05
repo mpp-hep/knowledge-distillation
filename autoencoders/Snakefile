@@ -1,27 +1,100 @@
 configfile: 'config.yaml'
 
-rule kd_train:
+rule reformat_ae_l1_data:
     input:
+        data = 'output/data_-1.pickle',
         teacher_json = '/afs/cern.ch/user/e/egovorko/eos/paper_output/model-conv_ae-8-b0-q0-not_pruned.json',
         teacher_h5 = '/afs/cern.ch/user/e/egovorko/eos/paper_output/model-conv_ae-8-b0-q0-not_pruned.h5'
     output:
+        train_loss = 'output/l1_ae_train_loss.h5',
+        test_loss = 'output/l1_ae_test_loss.h5',
+        signal_loss = 'output/l1_ae_signal_loss.h5'
+    shell:
+        'python reformat_ae_l1_data.py --data-file {input.data} \
+                                       --teacher-input-json {input.teacher_json} \
+                                       --teacher-input-h5 {input.teacher_h5} \
+                                       --output-train-loss {output.train_loss} \
+                                       --output-test-loss {output.test_loss} \
+                                       --output-signal-loss {output.signal_loss}'
+
+rule kd_ae_l1_train:
+    input:
+        train = rules.reformat_ae_l1_data.output.train_loss,
+        test = rules.reformat_ae_l1_data.output.test_loss,
+        signal = rules.reformat_ae_l1_data.output.signal_loss,
+    output:
         h5 = 'output/student_model.h5',
         json = 'output/student_model.json',
-        result = '/eos/cms/store/cmst3/user/egovorko/output/student_result.h5'
+        result = 'output/student_result.h5'
+    params:
+        data_name = 'data',
+        loss_name = 'teacher_loss',
+        n_features = 3
     shell:
-        'python knowledge_distillation.py --teacher-input-json {input.teacher_json} \
-                                          --teacher-input-h5 {input.teacher_h5} \
+        'python knowledge_distillation.py --input-train-file {input.train} \
+                                          --input-test-file {input.test} \
+                                          --input-signal-file {input.signal} \
+                                          --data-name {params.data_name} \
+                                          --n-features {params.n_features} \
+                                          --teacher-loss_name {params.loss_name} \
                                           --output-model-h5 {output.h5} \
                                           --output-model-json {output.json} \
                                           --batch-size 1024 \
                                           --n-epochs 100 \
                                           --output-result {output.result}'
 
-
 rule kd_plot:
     input:
-        student = '/eos/cms/store/cmst3/user/egovorko/output/student_result.h5',
-        teacher = '/eos/cms/store/cmst3/user/egovorko/paper_output/result-conv_ae-8-b0-q0-not_pruned.h5'
+        student = rules.kd_ae_l1_train.output.result,
+        teacher = rules.reformat_ae_l1_data.output.test_loss,
+        signal = rules.reformat_ae_l1_data.output.signal_loss
+    params:
+        loss_name = 'teacher_loss',
+        plots = directory('plots/ae_l1/')
     shell:
         'python plot_results.py --student {input.student} \
-                                --teacher {input.teacher}'
+                                --teacher {input.teacher} \
+                                --teacher-loss-name {params.loss_name} \
+                                --output-dir {params.plots} \
+                                --signal {input.signal}'
+
+rule kd_graph_train:
+    input:
+        train = config['train'],
+        test = config['test'],
+        signal = config['signal']
+    output:
+        h5 = 'output/graph_student_model.h5',
+        json = 'output/graph_student_model.json',
+        result = 'output/graph_student_result.h5'
+    params:
+        data_name = 'InputParticlesOriginal',
+        loss_name = 'loss_all_reco_chamfer',
+        n_features = 3
+    shell:
+        'python knowledge_distillation.py --input-train-file {input.train} \
+                                          --input-test-file {input.test} \
+                                          --input-signal-file {input.signal} \
+                                          --data-name {params.data_name} \
+                                          --n-features {params.n_features} \
+                                          --teacher-loss_name {params.loss_name} \
+                                          --output-model-h5 {output.h5} \
+                                          --output-model-json {output.json} \
+                                          --batch-size 1024 \
+                                          --n-epochs 100 \
+                                          --output-result {output.result}'
+
+rule kd_graph_plot:
+    input:
+        student = rules.kd_graph_train.output.result,
+        signal = config['signal'],
+        teacher = config['test']
+    params:
+        loss_name = 'loss_all_reco_chamfer',
+        plots = directory('plots/graph/')
+    shell:
+        'python plot_results.py --student {input.student} \
+                                --teacher {input.teacher} \
+                                --teacher-loss-name {params.loss_name} \
+                                --output-dir {params.plots} \
+                                --signal {input.signal}'

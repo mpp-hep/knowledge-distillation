@@ -48,11 +48,14 @@ def student(image_shape):
     x = QActivation("quantized_relu(6,0)")(x) \
         if quantize else \
         Activation('relu')(x)
-    out = QDense(1,
+    x = QDense(1,
         kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
         bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
         if quantize else \
         Dense(1)(x)
+    out = QActivation("quantized_relu(6,0)")(x) \
+        if quantize else \
+        Activation('relu')(x)
     model = Model(inputs=inp, outputs=out)
     model.summary()
     # compile AE
