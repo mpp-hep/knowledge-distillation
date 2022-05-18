@@ -5,6 +5,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
     Input,
     Dense,
+    Dropout,
     BatchNormalization,
     Flatten,
     Activation,
@@ -16,34 +17,45 @@ from qkeras import (
     )
 from tensorflow_model_optimization.python.core.sparsity.keras import pruning_wrapper
 
-def student(image_shape):
+def kl_loss(y_true, y_predicted):
+    kl = y_true * (tf.math.log(y_true/y_predicted))
+    total_kl = tf.math.reduce_mean(kl)
+    return total_kl
+
+def student(image_shape, lr=3E-3, dropout=None, node_size=32):
     quantize = False
     inp = Input((image_shape[1:]))
     x = Flatten()(inp)
     x = BatchNormalization()(x)
-    x = QDense(64,
+    x = QDense(node_size*2,
         kernel_quantizer="quantized_bits(6,0,0,alpha=1)",
         bias_quantizer="quantized_bits(6,0,0,alpha=1)")(x) \
         if quantize else \
-        Dense(64)(x)
+        Dense(node_size*2)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
     x = BatchNormalization()(x)
     x = QActivation("quantized_relu(6,0)")(x) \
         if quantize else \
         Activation('relu')(x)
-    x = QDense(32,
+    x = QDense(node_size,
         kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
         bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
         if quantize else \
-        Dense(32)(x)
+        Dense(node_size)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
     x = BatchNormalization()(x)
     x = QActivation("quantized_relu(6,0)")(x) \
         if quantize else \
         Activation('relu')(x)
-    x = QDense(32,
+    x = QDense(node_size,
         kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
         bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
         if quantize else \
-        Dense(32)(x)
+        Dense(node_size)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
     x = BatchNormalization()(x)
     x = QActivation("quantized_relu(6,0)")(x) \
         if quantize else \
@@ -59,6 +71,6 @@ def student(image_shape):
     model = Model(inputs=inp, outputs=out)
     model.summary()
     # compile AE
-    model.compile(optimizer=Adam(lr=3E-3, amsgrad=True),
-        loss='mse')
+    model.compile(optimizer=Adam(lr=lr, amsgrad=True),
+        loss='huber')
     return model

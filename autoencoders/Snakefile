@@ -39,6 +39,7 @@ rule kd_ae_l1_train:
                                           --teacher-loss_name {params.loss_name} \
                                           --output-model-h5 {output.h5} \
                                           --output-model-json {output.json} \
+                                          --node-size 32 \
                                           --batch-size 1024 \
                                           --n-epochs 100 \
                                           --output-result {output.result}'
@@ -69,7 +70,7 @@ rule kd_graph_train:
         result = 'output/graph_student_result.h5'
     params:
         data_name = 'InputParticlesOriginal',
-        loss_name = 'loss_all_reco_chamfer',
+        loss_name = 'loss_pid',
         n_features = 3
     shell:
         'python knowledge_distillation.py --input-train-file {input.train} \
@@ -87,10 +88,10 @@ rule kd_graph_train:
 rule kd_graph_plot:
     input:
         student = rules.kd_graph_train.output.result,
-        signal = config['signal'],
-        teacher = config['test']
+        signal = 'output/signals_fixed_evaluated_model21_merged.h5',
+        teacher = 'output/background_validation_fixed_evaluated_model21_merged.h5'
     params:
-        loss_name = 'loss_all_reco_chamfer',
+        loss_name = 'loss_pid',
         plots = directory('plots/graph/')
     shell:
         'python plot_results.py --student {input.student} \
@@ -98,3 +99,4 @@ rule kd_graph_plot:
                                 --teacher-loss-name {params.loss_name} \
                                 --output-dir {params.plots} \
                                 --signal {input.signal}'
+

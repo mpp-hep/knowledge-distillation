@@ -81,11 +81,11 @@ def plot_rocs(student_file, teacher_file, signal_file, teacher_loss_name, anomal
         'student': get_metric(student_total_loss[0], student_total_loss[1]),
         'teacher': get_metric(teacher_total_loss[0], teacher_total_loss[1])}
 
-    plt.plot(figure_of_merit['student'][0], figure_of_merit['student'][1], "-",
+    roc_student = plt.plot(figure_of_merit['student'][0], figure_of_merit['student'][1], "-",
         label=f'student AUC = {figure_of_merit["student"][2]*100:.0f}%',
         linewidth=3, color=colors[0])
 
-    plt.plot(figure_of_merit['teacher'][0], figure_of_merit['teacher'][1], "-",
+    roc_teacher = plt.plot(figure_of_merit['teacher'][0], figure_of_merit['teacher'][1], "-",
         label=f'teacher AUC = {figure_of_merit["teacher"][2]*100:.0f}%',
         linewidth=3, color=colors[1])
 
@@ -101,6 +101,63 @@ def plot_rocs(student_file, teacher_file, signal_file, teacher_loss_name, anomal
     plt.tight_layout()
 
     return mse_student_tr, mse_teacher_tr
+
+def plot_loss(student_file, teacher_file, signal_file, teacher_loss_name, output_dir):
+    # load AE model
+    with h5py.File(student_file, 'r') as data:
+        student_total_loss = []
+        student_total_loss.append(data['predicted_loss'][:].flatten())
+        for bsm in BSM_SAMPLES:
+            student_total_loss.append(data[f'predicted_loss_{bsm}'][:].flatten())
+
+    with h5py.File(teacher_file, 'r') as data:
+        teacher_total_loss = []
+        teacher_total_loss.append(np.array(data[teacher_loss_name])[:].flatten())
+
+    with h5py.File(signal_file, 'r') as bsm_data:
+        # for graph anomalies loss are all in one array
+        for bsm in zip(BSM_SAMPLES, [33,30,31,32]):
+            if 'ProcessID' in bsm_data.keys():
+                teacher_total_loss.append(bsm_data[teacher_loss_name][bsm_data['ProcessID'][:,0]==bsm[1]].flatten())
+            else:
+                teacher_total_loss.append(bsm_data[f'{teacher_loss_name}_{bsm[0]}'][:].flatten())
+
+    hrange = np.linspace(0,2500,500)
+
+    for i, base in enumerate(zip(teacher_total_loss,student_total_loss)):
+        plt.hist(base[0],
+            hrange,
+            label=PLOTTING_LABELS[i],
+            linewidth=3,
+            color=colors[i],
+            histtype='step',
+            density=True)
+
+    plt.semilogy()
+    plt.ylabel('A.U.', )
+    plt.xlabel('teacher loss', )
+    plt.legend(loc=(1.04,0))
+    plt.savefig(os.path.join(output_dir, f'loss_teacher.pdf'), bbox_inches="tight")
+    plt.clf()
+
+
+    hrange = np.linspace(0,2500,500)
+
+    for i, base in enumerate(zip(teacher_total_loss,student_total_loss)):
+        plt.hist(base[1],
+            hrange,
+            label=PLOTTING_LABELS[i],
+            linewidth=3,
+            color=colors[i],
+            histtype='step',
+            density=True)
+
+    plt.semilogy()
+    plt.ylabel('A.U.', )
+    plt.xlabel('student loss', )
+    plt.legend(loc=(1.04,0))
+    plt.savefig(os.path.join(output_dir, f'loss_student.pdf'), bbox_inches="tight")
+    plt.clf()
 
 def plot_loss_pull(student_file, teacher_file, signal_file, teacher_loss_name, output_dir):
     # load AE model
@@ -126,12 +183,19 @@ def plot_loss_pull(student_file, teacher_file, signal_file, teacher_loss_name, o
     hrange = 100
 
     for i, base in enumerate(zip(teacher_total_loss,student_total_loss)):
+        # Mean, Median, STD, 16%quantile, 84%quantile, Skew, Kurtotis
         diff = np.subtract(base[0], base[1])
+        mean = np.mean(diff)
+        median = np.median(diff)
+        std = np.std(diff)
+        quant16 = np.quantile(diff, 0.16)
+        quant84 = np.quantile(diff, 0.84)
         skew = scipy.stats.skew(diff)
         kurt = scipy.stats.kurtosis(diff)
         plt.hist(diff,
             hrange,
-            label=PLOTTING_LABELS[i]+f' skew={skew:.0f}; kurt={kurt:.0f}',
+            label=PLOTTING_LABELS[i]+\
+            f'\n mu={mean:.1f} median={median:.2f} std={std:.1f}\n quant16={quant16:.3f} quant84={quant84:.3f}\n skew={skew:.0f} kurt={kurt:.0f}',
             linewidth=3,
             color=colors[i],
             histtype='step',
@@ -140,9 +204,8 @@ def plot_loss_pull(student_file, teacher_file, signal_file, teacher_loss_name, o
     plt.semilogy()
     plt.ylabel('A.U.', )
     plt.xlabel('teacher loss - student loss', )
-    plt.tight_layout()
-    plt.legend()
-    plt.savefig(os.path.join(output_dir, f'loss_pull.pdf'))
+    plt.legend(loc=(1.04,0))
+    plt.savefig(os.path.join(output_dir, f'loss_pull.pdf'), bbox_inches="tight")
     plt.clf()
 
 if __name__ == '__main__':
@@ -157,6 +220,7 @@ if __name__ == '__main__':
     colors = ['#016c59', '#7a5195', '#ef5675', '#ffa600', '#67a9cf']
 
     make_plot_training_history(args.student, args.output_dir)
+    plt.clf()
 
     for bsm in zip(BSM_SAMPLES, [33,30,31,32]):
         student_tr, teacher_tr = plot_rocs(args.student, args.teacher, args.signal,
@@ -166,3 +230,4 @@ if __name__ == '__main__':
 
     plot_loss_pull(args.student, args.teacher, args.signal, args.teacher_loss_name, args.output_dir)
 
+    plot_loss(args.student, args.teacher, args.signal, args.teacher_loss_name, args.output_dir)

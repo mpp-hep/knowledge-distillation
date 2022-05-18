@@ -13,11 +13,11 @@ import pickle
 import setGPU
 
 from models import student
-from plot_results import reco_loss, BSM_SAMPLES
+from plot_results import BSM_SAMPLES
 
 def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
-    output_history, batch_size, n_epochs, output_result):
+    output_history, batch_size, n_epochs, dropout, learning_rate, node_size, output_result):
 
     # load teacher's loss for training
     with h5py.File(input_train_file, 'r') as f:
@@ -25,7 +25,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         y_train = np.array(f[teacher_loss_name])
 
     # student model
-    student_model = student(x_train.shape)
+    student_model = student(x_train.shape, learning_rate, dropout, node_size)
 
     # define callbacks
     callbacks=[
@@ -56,6 +56,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     # load testing set
     with h5py.File(input_test_file, 'r') as f:
         x_test = np.array(f[data_name][:,:,:n_features])
+
 
     # get prediction
     predicted_loss = student_model.predict(x_test)
@@ -95,6 +96,9 @@ if __name__ == '__main__':
     parser.add_argument('--output-history', type=str, help='Output file with the model training history', default='output/student_history.pickle')
     parser.add_argument('--batch-size', type=int, required=True, help='Batch size')
     parser.add_argument('--n-epochs', type=int, required=True, help='Number of epochs')
+    parser.add_argument('--dropout', type=float, default=None, help='Dropout rate')
+    parser.add_argument('--learning-rate', type=float, default=3E-3, help='Learning rate')
+    parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
     args = parser.parse_args()
     knowledge_distillation(**vars(args))

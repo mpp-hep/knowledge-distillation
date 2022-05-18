@@ -1,3 +1,4 @@
+import math
 import argparse
 import h5py
 import numpy as np
@@ -12,7 +13,33 @@ from qkeras import QConv2D, QDense, QActivation
 import pickle
 import setGPU
 
-from plotting import reco_loss, BSM_SAMPLES
+from plot_results import BSM_SAMPLES
+
+def mse_loss(inputs, outputs):
+    return np.mean(np.square(inputs-outputs), axis=-1)
+
+def reco_loss(inputs, outputs, dense=False):
+
+    if dense:
+        outputs = outputs.reshape(outputs.shape[0],19,3,1)
+        inputs = inputs.reshape(inputs.shape[0],19,3,1)
+
+    # trick on phi
+    outputs_phi = math.pi*np.tanh(outputs)
+    # trick on eta
+    outputs_eta_egamma = 3.0*np.tanh(outputs)
+    outputs_eta_muons = 2.1*np.tanh(outputs)
+    outputs_eta_jets = 4.0*np.tanh(outputs)
+    outputs_eta = np.concatenate([outputs[:,0:1,:,:], outputs_eta_egamma[:,1:5,:,:], outputs_eta_muons[:,5:9,:,:], outputs_eta_jets[:,9:19,:,:]], axis=1)
+    outputs = np.concatenate([outputs[:,:,0,:], outputs_eta[:,:,1,:], outputs_phi[:,:,2,:]], axis=2)
+    # change input shape
+    inputs = np.squeeze(inputs, -1)
+    # # calculate and apply mask
+    mask = np.not_equal(inputs, 0)
+    outputs = np.multiply(outputs, mask)
+
+    reco_loss = mse_loss(inputs.reshape(inputs.shape[0],57), outputs.reshape(outputs.shape[0],57))
+    return reco_loss
 
 def reformat_ae_l1_data(data_file, teacher_input_json, teacher_input_h5,
     output_train_loss, output_test_loss, output_signal_loss):
@@ -50,7 +77,7 @@ def reformat_ae_l1_data(data_file, teacher_input_json, teacher_input_h5,
         bsm_data_target[:,:,0] = pt_scaler.transform(bsm_data_target[:,:,0])
         bsm_data_target[:,:,0] = np.multiply(bsm_data_target[:,:,0], np.not_equal(bsm_data[:,:,0],0))
         bsm_data_target = bsm_data_target.reshape(bsm_data_target.shape[0],bsm_data_target.shape[1],bsm_data_target.shape[2],1)
-        result_bsm.append([bsm_data_name, reco_loss(bsm_data_target, predicted_bsm_data)])
+        result_bsm.append([bsm_data_name, reco_loss(bsm_data_target, predicted_bsm_data), bsm_data_target])
 
     with h5py.File(output_signal_loss, 'w') as h5f:
         for i, bsm in enumerate(result_bsm):
