@@ -20,4 +20,6 @@ to force it. Use `-F` to also force all the upstream rules to be re-run.
 Good thing to do before running (only has to be done once) is to create
 an `output/` directory that is a symbolic link to your `eos` space (or
 wherever you have a lot of available space), to be able to store all the data.
-`ln -s {your-eos-path-to-output} output/  `
+```
+ln -s {your-eos-path-to-output} output/  
+```
