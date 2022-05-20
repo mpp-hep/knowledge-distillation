@@ -1,11 +1,13 @@
-# knowledge-distillation
+# Knowledge Distillation
 The repository is dedicated to study of knowledge distillation techniques for L1 trigger usage
 
 ## Autoencoders
 
 To set up and run snakemake do
-`> pip install snakemake`
-`> snakemake -c1 {rule_name}`
+```
+pip install snakemake
+snakemake -c1 {rule_name}
+```
 where `-c1` specifies number of cores provided (one in this case).
 It became required to specify it in the latest versions of snakemake,
 so to make life easier you can add
