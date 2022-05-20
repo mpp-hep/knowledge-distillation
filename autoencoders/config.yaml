@@ -5,7 +5,14 @@ ato4l: '/eos/project/d/dshep/TOPCLASS/L1jetLepData/Ato4l_lepFilter_13TeV/Ato4l_l
 hChToTauNu: '/eos/project/d/dshep/L1anomaly_DELPHES/hChToTauNu_13TeV_PU20.h5'
 hToTauTau: '/eos/project/d/dshep/L1anomaly_DELPHES/hToTauTau_13TeV_PU20.h5'
 
+# Datasets constructed from samples above
+dataset: '/eos/cms/store/cmst3/user/egovorko/kd_output/data_-1.pickle'
+
 # Graph results from Nadya
 signal: '/eos/user/n/nchernya/MLHEP/AnomalyDetection/autoencoder_for_anomaly/graph_AD_event_based/run_19/evaluated/signals_evaluated_model21_merged_new.h5'
 train: '/eos/user/n/nchernya/MLHEP/AnomalyDetection/autoencoder_for_anomaly/graph_AD_event_based/run_19/evaluated/background_train_fixed_evaluated_model21_merged.h5'
 test: '/eos/user/n/nchernya/MLHEP/AnomalyDetection/autoencoder_for_anomaly/graph_AD_event_based/run_19/evaluated/background_validation_fixed_evaluated_model21_merged.h5'
+
+# Teacher model
+json: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q0-not_pruned.json'
+h5: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q0-not_pruned.h5'

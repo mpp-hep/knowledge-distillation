@@ -17,12 +17,15 @@ from qkeras import (
     )
 from tensorflow_model_optimization.python.core.sparsity.keras import pruning_wrapper
 
-def kl_loss(y_true, y_predicted):
-    kl = y_true * (tf.math.log(y_true/y_predicted))
+def kl_loss(y_true, y_pred):
+    kl = y_true * (tf.math.log(y_true/y_pred))
     total_kl = tf.math.reduce_mean(kl)
     return total_kl
 
-def student(image_shape, lr=3E-3, dropout=None, node_size=32):
+def smape(y_true, y_pred):
+    return 100 * ( abs(y_true - y_pred) / (abs(y_true) + abs(y_pred)) )
+
+def student(image_shape, lr, dropout, node_size, distillation_loss):
     quantize = False
     inp = Input((image_shape[1:]))
     x = Flatten()(inp)
@@ -72,5 +75,5 @@ def student(image_shape, lr=3E-3, dropout=None, node_size=32):
     model.summary()
     # compile AE
     model.compile(optimizer=Adam(lr=lr, amsgrad=True),
-        loss='huber')
+        loss=distillation_loss)
     return model

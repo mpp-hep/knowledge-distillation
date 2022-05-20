@@ -122,7 +122,7 @@ def plot_loss(student_file, teacher_file, signal_file, teacher_loss_name, output
             else:
                 teacher_total_loss.append(bsm_data[f'{teacher_loss_name}_{bsm[0]}'][:].flatten())
 
-    hrange = np.linspace(0,2500,500)
+    hrange = np.linspace(0,50,500)
 
     for i, base in enumerate(zip(teacher_total_loss,student_total_loss)):
         plt.hist(base[0],
@@ -141,7 +141,7 @@ def plot_loss(student_file, teacher_file, signal_file, teacher_loss_name, output
     plt.clf()
 
 
-    hrange = np.linspace(0,2500,500)
+    hrange = np.linspace(0,50,500)
 
     for i, base in enumerate(zip(teacher_total_loss,student_total_loss)):
         plt.hist(base[1],

@@ -1,3 +1,4 @@
+import os
 import argparse
 import h5py
 import numpy as np
@@ -12,12 +13,15 @@ from qkeras import QConv2D, QDense, QActivation
 import pickle
 import setGPU
 
+import matplotlib.pyplot as plt
+
 from models import student
 from plot_results import BSM_SAMPLES
 
 def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
-    output_history, batch_size, n_epochs, dropout, learning_rate, node_size, output_result):
+    output_history, batch_size, n_epochs, distillation_loss, dropout,
+    learning_rate, node_size, output_result, output_dir):
 
     # load teacher's loss for training
     with h5py.File(input_train_file, 'r') as f:
@@ -25,7 +29,13 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         y_train = np.array(f[teacher_loss_name])
 
     # student model
-    student_model = student(x_train.shape, learning_rate, dropout, node_size)
+    student_model = student(
+        x_train.shape,
+        learning_rate,
+        dropout,
+        node_size,
+        distillation_loss
+        )
 
     # define callbacks
     callbacks=[
@@ -41,6 +51,26 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         validation_split=0.2,
         callbacks=callbacks)
 
+    plt.hist(student_model.predict(x_train),
+            100,
+            label='Student on training sample',
+            linewidth=3,
+            color='#016c59',
+            histtype='step',
+            density=True)
+    plt.hist(y_train,
+            100,
+            label='Teacher on training sample',
+            linewidth=3,
+            color='#7a5195',
+            histtype='step',
+            density=True)
+
+    plt.semilogy()
+    plt.ylabel('A.U.', )
+    plt.xlabel('Loss on training sample', )
+    plt.legend(loc='best')
+    plt.savefig(os.path.join(output_dir, f'loss_on_training.pdf'))
 
     # save student model
     student_model_json = student_model.to_json()
@@ -96,9 +126,11 @@ if __name__ == '__main__':
     parser.add_argument('--output-history', type=str, help='Output file with the model training history', default='output/student_history.pickle')
     parser.add_argument('--batch-size', type=int, required=True, help='Batch size')
     parser.add_argument('--n-epochs', type=int, required=True, help='Number of epochs')
+    parser.add_argument('--distillation-loss', type=str, default='mse', help='Loss to use for distillation')
     parser.add_argument('--dropout', type=float, default=None, help='Dropout rate')
     parser.add_argument('--learning-rate', type=float, default=3E-3, help='Learning rate')
     parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
+    parser.add_argument('--output-dir', type=str, default='plots/')
     args = parser.parse_args()
     knowledge_distillation(**vars(args))
