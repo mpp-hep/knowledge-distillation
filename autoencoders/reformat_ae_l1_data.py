@@ -13,7 +13,14 @@ from qkeras import QConv2D, QDense, QActivation
 import pickle
 import setGPU
 
+
 from plot_results import BSM_SAMPLES
+
+idx_met_0,idx_met_1=0,1
+idx_eg_0,idx_eg_1=1,5
+idx_mu_0,idx_mu_1=5,9
+idx_jet_0,idx_jet_1=9,19
+
 
 def mse_loss(inputs, outputs):
     return np.mean(np.square(inputs-outputs), axis=-1)
@@ -30,7 +37,7 @@ def reco_loss(inputs, outputs, dense=False):
     outputs_eta_egamma = 3.0*np.tanh(outputs)
     outputs_eta_muons = 2.1*np.tanh(outputs)
     outputs_eta_jets = 4.0*np.tanh(outputs)
-    outputs_eta = np.concatenate([outputs[:,0:1,:,:], outputs_eta_egamma[:,1:5,:,:], outputs_eta_muons[:,5:9,:,:], outputs_eta_jets[:,9:19,:,:]], axis=1)
+    outputs_eta = np.concatenate([outputs[:,idx_met_0:idx_met_1,:,:], outputs_eta_egamma[:,idx_eg_0:idx_eg_1,:,:], outputs_eta_muons[:,idx_mu_0:idx_mu_1,:,:], outputs_eta_jets[:,idx_jet_0:idx_jet_1,:,:]], axis=1)
     outputs = np.concatenate([outputs[:,:,0,:], outputs_eta[:,:,1,:], outputs_phi[:,:,2,:]], axis=2)
     # change input shape
     inputs = np.squeeze(inputs, -1)
