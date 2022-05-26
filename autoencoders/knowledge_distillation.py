@@ -142,8 +142,8 @@ if __name__ == '__main__':
     parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
     parser.add_argument('--output-dir', type=str, default='plots/')
-    parser.add_argument('--particles-shuffle-strategy', type=str, default='', help='How to shuffle particles : shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
-    parser.add_argument('--particles-shuffle-during', type=str, default='', help='Shuffle particles during : train/predict')
+    parser.add_argument('--particles-shuffle-strategy', type=str, default='none', help='How to shuffle particles : none / shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
+    parser.add_argument('--particles-shuffle-during', type=str, default='never', help='Shuffle particles during : never / train / predict / train_predict')
 
     args = parser.parse_args()
     knowledge_distillation(**vars(args))
