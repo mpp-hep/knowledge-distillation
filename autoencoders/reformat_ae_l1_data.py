@@ -59,12 +59,12 @@ def reformat_ae_l1_data(data_file, teacher_input_json, teacher_input_h5,
 
     y_teacher_train = reco_loss(y_train, teacher_model.predict(x_train))
     with h5py.File(output_train_loss, 'w') as h5f:
-        h5f.create_dataset('teacher_loss', data=y_teacher_train)
+        h5f.create_dataset('teacher_loss', data=np.log(y_teacher_train+1))
         h5f.create_dataset('data', data=x_train)
 
     y_teacher_test = reco_loss(y_test, teacher_model.predict(x_test))
     with h5py.File(output_test_loss, 'w') as h5f:
-        h5f.create_dataset('teacher_loss', data=y_teacher_test)
+        h5f.create_dataset('teacher_loss', data=np.log(y_teacher_test+1))
         h5f.create_dataset('data', data=x_test)
 
     # test model on BSM data
@@ -82,7 +82,7 @@ def reformat_ae_l1_data(data_file, teacher_input_json, teacher_input_h5,
     with h5py.File(output_signal_loss, 'w') as h5f:
         for i, bsm in enumerate(result_bsm):
             h5f.create_dataset(f'bsm_data_{bsm[0]}', data=all_bsm_data[i])
-            h5f.create_dataset(f'teacher_loss_{bsm[0]}', data=bsm[1])
+            h5f.create_dataset(f'teacher_loss_{bsm[0]}', data=np.log(bsm[1]+1))
 
 
 if __name__ == '__main__':
