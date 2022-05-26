@@ -12,21 +12,25 @@ from tensorflow_model_optimization.python.core.sparsity.keras import pruning_wra
 from qkeras import QConv2D, QDense, QActivation
 import pickle
 import setGPU
+import json
 
 import matplotlib.pyplot as plt
 
 from models import student
 from plot_results import BSM_SAMPLES
 
+
 def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
     output_history, batch_size, n_epochs, distillation_loss, dropout,
-    learning_rate, node_size, output_result, output_dir):
+    learning_rate, node_size, output_result, output_dir,
+    particles_shuffle_strategy,particles_shuffle_during):
 
     # load teacher's loss for training
     with h5py.File(input_train_file, 'r') as f:
         x_train = np.array(f[data_name][:,:,:n_features])
         y_train = np.array(f[teacher_loss_name])
+
 
     # student model
     student_model = student(
@@ -34,16 +38,19 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         learning_rate,
         dropout,
         node_size,
-        distillation_loss
+        distillation_loss,
+        particles_shuffle_strategy,
+        particles_shuffle_during
         )
 
     # define callbacks
     callbacks=[
-        EarlyStopping(monitor='val_loss', patience=10, verbose=1),
-        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1)
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_lr=1e-9)
         ]
 
     # train student to reproduce teachers' loss
+    print('Starting training')
     history = student_model.fit(x=x_train, y=y_train,
         epochs=n_epochs,
         batch_size=batch_size,
@@ -51,7 +58,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         validation_split=0.2,
         callbacks=callbacks)
 
-    plt.hist(student_model.predict(x_train),
+    plt.hist(student_model.predict(x_train,batch_size=batch_size),
             100,
             label='Student on training sample',
             linewidth=3,
@@ -70,12 +77,15 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     plt.ylabel('A.U.', )
     plt.xlabel('Loss on training sample', )
     plt.legend(loc='best')
-    plt.savefig(os.path.join(output_dir, f'loss_on_training.pdf'))
+    nametag = output_model_h5[output_model_h5.find('model_')+len('model_'):output_model_h5.find('.h5')]
+    plt.savefig(os.path.join(output_dir, f'loss_on_training_'+nametag+'.pdf'))
 
     # save student model
-    student_model_json = student_model.to_json()
+    #TO DO: With custom model it is not trivial to save model as a json. Either fix or remove save-json option 
+    #student_model_json = student_model.to_json()
     with open(output_model_json, 'w') as json_file:
-        json_file.write(student_model_json)
+        #json_file.write(student_model_json)
+        json_file.write(json.dumps({}))
     student_model.save_weights(output_model_h5)
 
     # save training history
@@ -89,7 +99,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
 
 
     # get prediction
-    predicted_loss = student_model.predict(x_test)
+    predicted_loss = student_model.predict(x_test,batch_size=batch_size)
 
     # load testing BSM samples
     with h5py.File(input_signal_file, 'r') as f:
@@ -101,7 +111,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         for bsm_data_name, bsm_id in zip(BSM_SAMPLES, [33,30,31,32]):
             bsm_data = all_bsm_data[PID[:,0]==bsm_id] if PID is not None \
                 else np.array(f[f'bsm_data_{bsm_data_name}'][:,:,:n_features])
-            predicted_bsm_data = student_model.predict(bsm_data)
+            predicted_bsm_data = student_model.predict(bsm_data,batch_size=batch_size)
             result_bsm.append([bsm_data_name, predicted_bsm_data])
 
     # save results
@@ -132,5 +142,8 @@ if __name__ == '__main__':
     parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
     parser.add_argument('--output-dir', type=str, default='plots/')
+    parser.add_argument('--particles-shuffle-strategy', type=str, default='none', help='How to shuffle particles : none / shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
+    parser.add_argument('--particles-shuffle-during', type=str, default='never', help='Shuffle particles during : never / train / predict / train_predict')
+
     args = parser.parse_args()
     knowledge_distillation(**vars(args))
