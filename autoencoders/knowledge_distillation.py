@@ -77,8 +77,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     plt.ylabel('A.U.', )
     plt.xlabel('Loss on training sample', )
     plt.legend(loc='best')
-    nametag = output_model_h5[output_model_h5.find('model_')+len('model_'):output_model_h5.find('.h5')]
-    plt.savefig(os.path.join(output_dir, f'loss_on_training_'+nametag+'.pdf'))
+    plt.savefig(os.path.join(output_dir, f'loss_on_training.pdf'))
 
     # save student model
     #TO DO: With custom model it is not trivial to save model as a json. Either fix or remove save-json option 
@@ -142,8 +141,8 @@ if __name__ == '__main__':
     parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
     parser.add_argument('--output-dir', type=str, default='plots/')
-    parser.add_argument('--particles-shuffle-strategy', type=str, default='none', help='How to shuffle particles : none / shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
-    parser.add_argument('--particles-shuffle-during', type=str, default='never', help='Shuffle particles during : never / train / predict / train_predict')
+    parser.add_argument('--particles-shuffle-strategy', type=str, default='none',choices=['none','shuffle_all', 'shuffle_within_between_pid','shuffle_within_pid'], help='How to shuffle particles : none / shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
+    parser.add_argument('--particles-shuffle-during', type=str, default='never',choices=['never','train','predict','train_predict'], help='Shuffle particles during : never / train / predict / train_predict')
 
     args = parser.parse_args()
     knowledge_distillation(**vars(args))

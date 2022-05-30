@@ -11,7 +11,7 @@ from tensorflow.keras.layers import (
     BatchNormalization,
     Flatten,
     Activation,
-    Lambda
+    Concatenate
     )
 from qkeras import (
     QDense,
@@ -19,7 +19,7 @@ from qkeras import (
     quantized_bits
     )
 from tensorflow_model_optimization.python.core.sparsity.keras import pruning_wrapper
-from reformat_ae_l1_data_shuffling import idx_met_0,idx_met_1,idx_eg_0,idx_eg_1,idx_mu_0,idx_mu_1,idx_jet_0,idx_jet_1
+from reformat_ae_l1_data import idx_met_0,idx_met_1,idx_eg_0,idx_eg_1,idx_mu_0,idx_mu_1,idx_jet_0,idx_jet_1
 
 
 def kl_loss(y_true, y_pred):
@@ -63,11 +63,11 @@ class StudentModel(tf.keras.Model):
         for block in particles_blocks:
             tot_particles = block[1]-block[0]
             x_block = x[:,block[0]:block[1],:]
-            idx = Lambda(lambda y: tf.random.shuffle(tf.range(y)))(tot_particles)
-            x_shuffled_block.append(Lambda(lambda y: tf.gather(y[0], tf.cast(y[1], tf.int32), axis=1,))([x_block, idx]))
+            idx = tf.random.shuffle(tf.range(tot_particles))
+            x_shuffled_block.append(tf.gather(x_block, tf.cast(idx, tf.int32), axis=1,))
             
         if len(x_shuffled_block)>1 :
-            x_shuffled = tf.keras.layers.Concatenate(axis=1)(x_shuffled_block)
+            x_shuffled = Concatenate(axis=1)(x_shuffled_block)
         else :
             x_shuffled = x_shuffled_block
     return x_shuffled
@@ -125,9 +125,7 @@ class StudentModel(tf.keras.Model):
   def call(self, inputs, training=False):
     x = inputs
     if (training and ('train' in self.shuffle_during)) or (not training and ('predict' in self.shuffle_during)):
-        #tf.print("before:", x, summarize=-1)
         x = self.apply_shuffling(x)
-        #tf.print("after:", x, summarize=-1)
     out = self.main_model(x)
     return out
 
