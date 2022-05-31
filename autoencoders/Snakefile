@@ -19,7 +19,7 @@ rule reformat_ae_l1_data:
                                        --output-train-loss {output.train_loss} \
                                        --output-test-loss {output.test_loss} \
                                        --output-signal-loss {output.signal_loss}\
-                                       --log_loss {params.log_loss}'
+                                       --log-loss {params.log_loss}'
 
 rule kd_ae_l1_train:
     input:

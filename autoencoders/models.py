@@ -30,20 +30,40 @@ def kl_loss(y_true, y_pred):
 def smape(y_true, y_pred):
     return 100 * ( abs(y_true - y_pred) / (abs(y_true) + abs(y_pred)) )
 
+def mse_loss(inputs, outputs):
+    return tf.math.reduce_mean(tf.math.square(outputs-inputs), axis=-1)
+
+def make_mse(inputs, outputs):
+    # remove last dimension
+    inputs = tf.squeeze(inputs, axis=-1)
+    inputs = tf.cast(inputs, dtype=tf.float32)
+    # trick with phi
+    outputs_phi = math.pi*tf.math.tanh(outputs)
+    # trick with phi
+    outputs_eta_egamma = 3.0*tf.math.tanh(outputs)
+    outputs_eta_muons = 2.1*tf.math.tanh(outputs)
+    outputs_eta_jets = 4.0*tf.math.tanh(outputs)
+    outputs_eta = tf.concat([outputs[:,0:1,:,:], outputs_eta_egamma[:,1:5,:,:], outputs_eta_muons[:,5:9,:,:], outputs_eta_jets[:,9:19,:,:]], axis=1)
+    # use both tricks
+    outputs = tf.concat([outputs[:,:,0,:], outputs_eta[:,:,1,:], outputs_phi[:,:,2,:]], axis=2)
+    # mask zero features
+    mask = tf.math.not_equal(inputs,0)
+    mask = tf.cast(mask, tf.float32)
+    outputs = mask * outputs
+
+    loss = mse_loss(tf.reshape(inputs, [-1, 57]), tf.reshape(outputs, [-1, 57]))
+    loss = tf.math.reduce_mean(loss, axis=0) # average over batch
+    return loss
 
 
 
-class StudentModel(tf.keras.Model):
-  def __init__(self,image_shape, dropout, node_size, shuffle_strategy, shuffle_during, quantize):
+class ModelWithShuffling(tf.keras.Model):
+  def __init__(self, model, shuffle_strategy, shuffle_during):
     super().__init__()
     self.allowed_shuffle_strategies = 'shuffle_all,shuffle_within_pid,shuffle_within_between_pid'.split(',')
     self.shuffle_strategy = shuffle_strategy
     self.shuffle_during = shuffle_during
-    self.image_shape = image_shape
-    self.dropout = dropout
-    self.node_size = node_size 
-    self.quantize = quantize
-    self.main_model = self.build_main_model()
+    self.main_model = model
 
 
   def apply_shuffling(self,x):
@@ -72,56 +92,7 @@ class StudentModel(tf.keras.Model):
             x_shuffled = x_shuffled_block
     return x_shuffled
 
-  def build_main_model(self):
-    inp = Input(shape=(self.image_shape[1:]))
-    x = Flatten()(inp)
-    x = BatchNormalization()(x)
-    x = QDense(self.node_size*2,
-        kernel_quantizer="quantized_bits(6,0,0,alpha=1)",
-        bias_quantizer="quantized_bits(6,0,0,alpha=1)")(x) \
-        if self.quantize else \
-        Dense(self.node_size*2)(x)
-    if self.dropout:
-        x = Dropout(self.dropout)(x)
-    x = BatchNormalization()(x)
-    x = QActivation("quantized_relu(6,0)")(x) \
-        if self.quantize else \
-        Activation('relu')(x)
-    x = QDense(self.node_size,
-        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
-        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
-        if self.quantize else \
-        Dense(self.node_size)(x)
-    if self.dropout:
-        x = Dropout(self.dropout)(x)
-    x = BatchNormalization()(x)
-    x = QActivation("quantized_relu(6,0)")(x) \
-        if self.quantize else \
-        Activation('relu')(x)
-    x = QDense(self.node_size,
-        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
-        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
-        if self.quantize else \
-        Dense(self.node_size)(x)
-    if self.dropout:
-        x = Dropout(self.dropout)(x)
-    x = BatchNormalization()(x)
-    x = QActivation("quantized_relu(6,0)")(x) \
-        if self.quantize else \
-        Activation('relu')(x)
-    x = QDense(1,
-        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
-        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
-        if self.quantize else \
-        Dense(1)(x)
-    out = QActivation("quantized_relu(6,0)")(x) \
-        if self.quantize else \
-        Activation('relu')(x)
-    main_model = Model(inputs=inp, outputs=out,name='main_model')
-    main_model.summary()
-    return main_model
 
-        
   def call(self, inputs, training=False):
     x = inputs
     if (training and ('train' in self.shuffle_during)) or (not training and ('predict' in self.shuffle_during)):
@@ -130,16 +101,170 @@ class StudentModel(tf.keras.Model):
     return out
 
 
+def student_model(image_shape, node_size, quantize, dropout):
+    inp = Input(shape=(image_shape[1:]))
+    x = Flatten()(inp)
+    x = BatchNormalization()(x)
+    x = QDense(node_size*2,
+        kernel_quantizer="quantized_bits(6,0,0,alpha=1)",
+        bias_quantizer="quantized_bits(6,0,0,alpha=1)")(x) \
+        if quantize else \
+        Dense(node_size*2)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
+    x = BatchNormalization()(x)
+    x = QActivation("quantized_relu(6,0)")(x) \
+        if quantize else \
+        Activation('relu')(x)
+    x = QDense(node_size,
+        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
+        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
+        if quantize else \
+        Dense(node_size)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
+    x = BatchNormalization()(x)
+    x = QActivation("quantized_relu(6,0)")(x) \
+        if quantize else \
+        Activation('relu')(x)
+    x = QDense(node_size,
+        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
+        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
+        if quantize else \
+        Dense(node_size)(x)
+    if dropout:
+        x = Dropout(dropout)(x)
+    x = BatchNormalization()(x)
+    x = QActivation("quantized_relu(6,0)")(x) \
+        if quantize else \
+        Activation('relu')(x)
+    x = QDense(1,
+        kernel_quantizer = "quantized_bits(6,0,0,alpha=1)",
+        bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
+        if quantize else \
+        Dense(1)(x)
+    out = QActivation("quantized_relu(6,0)")(x) \
+        if quantize else \
+        Activation('relu')(x)
+    main_model = Model(inputs=inp, outputs=out,name='main_model')
+    main_model.summary()
+    return main_model
 
-def student(image_shape, lr, dropout, node_size, distillation_loss,particles_shuffle_strategy,particles_shuffle_during):
-    quantize = False
-    model = StudentModel(image_shape=image_shape,
-                         dropout=dropout,
-                         node_size=node_size, 
-                         shuffle_strategy=particles_shuffle_strategy,
-                         shuffle_during=particles_shuffle_during,
-                         quantize=quantize)
+
+def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned'):
+    int_size = QUANT_INT[quant_size]
+    # encoder
+    input_encoder = Input(shape=image_shape[1:], name='encoder_input')
+    if quant_size!=0:
+        quantized_inputs = QActivation(f'quantized_bits(16,10,0,alpha=1)')(input_encoder)
+        x = ZeroPadding2D(((1,0),(0,0)))(quantized_inputs)
+    else:
+        quantized_inputs = None
+        x = ZeroPadding2D(((1,0),(0,0)))(input_encoder)
+    x = BatchNormalization()(x)
+    #
+    x = Conv2D(16, kernel_size=(3,3), use_bias=False, padding='valid')(x) if quant_size==0 \
+        else QConv2D(16, kernel_size=(3,3), use_bias=False, padding='valid',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    x = AveragePooling2D(pool_size=(3, 1))(x)
+    #
+    x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    x = AveragePooling2D(pool_size=(3, 1))(x)
+    #
+    x = Flatten()(x)
+    #
+    enc = Dense(latent_dim)(x) if quant_size==0 \
+        else QDense(latent_dim,
+               kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)',
+               bias_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+
+    encoder = Model(inputs=input_encoder, outputs=enc)
+    encoder.summary()
+    # decoder
+    input_decoder = Input(shape=(latent_dim,), name='decoder_input')
+    x = Dense(64)(input_decoder) if quant_size==0 \
+        else QDense(64,
+               kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)',
+               bias_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(input_decoder)
+    #
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+    #
+    x = Reshape((2,1,32))(x)
+    #
+    x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    x = UpSampling2D((3,1))(x)
+    x = ZeroPadding2D(((0,0),(1,1)))(x)
+
+    x = Conv2D(16, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(16, kernel_size=(3,1), use_bias=False, padding='same',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    x = UpSampling2D((3,1))(x)
+    x = ZeroPadding2D(((1,0),(0,0)))(x)
+
+    dec = Conv2D(1, kernel_size=(3,3), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(1, kernel_size=(3,3), use_bias=False, padding='same',
+                        kernel_quantizer='quantized_bits(16,10,0,alpha=1)')(x)
+    #
+    decoder = Model(inputs=input_decoder, outputs=dec)
+    decoder.summary()
+
+    if pruning=='pruned':
+        start_pruning = np.ceil(image_shape[0]*0.8/1024).astype(np.int32) * 5
+        end_pruning = np.ceil(image_shape[0]*0.8/1024).astype(np.int32) * 15
+        pruning_schedule = tfmot.sparsity.keras.PolynomialDecay(
+                                initial_sparsity=0.0, final_sparsity=0.5,
+                                begin_step=start_pruning, end_step=end_pruning)
+        encoder_pruned = tfmot.sparsity.keras.prune_low_magnitude(encoder, pruning_schedule=pruning_schedule)
+        encoder = encoder_pruned
+        decoder_pruned = tfmot.sparsity.keras.prune_low_magnitude(decoder, pruning_schedule=pruning_schedule)
+        decoder = decoder_pruned
+
+    # ae
+    ae_outputs = decoder(encoder(input_encoder))
+    autoencoder = Model(inputs=input_encoder, outputs=ae_outputs)
+    autoencoder.summary()
+    # load weights
+    if pruning=='pruned':
+        autoencoder = model_set_weights(autoencoder, f'output/model-conv_ae-8-b0-q0-not_pruned', quant_size)
     # compile AE
-    model.compile(optimizer=Adam(lr=lr, amsgrad=True), 
+    autoencoder.compile(optimizer=Adam(lr=3E-3, amsgrad=True),
+        loss=make_mse)
+    return autoencoder
+
+
+def student(image_shape, lr, dropout, node_size, distillation_loss,
+    particles_shuffle_strategy, particles_shuffle_during):
+    quantize = False
+    model = ModelWithShuffling(model=student_model(image_shape, node_size, quantize, dropout),
+                               shuffle_strategy=particles_shuffle_strategy,
+                               shuffle_during=particles_shuffle_during)
+    # compile AE
+    model.compile(optimizer=Adam(lr=lr, amsgrad=True),
         loss=distillation_loss)
+    return model
+
+def teacher(image_shape, lr, particles_shuffle_strategy, particles_shuffle_during):
+    model = ModelWithShuffling(model=teacher_model(image_shape, latent_dim=8),
+                               shuffle_strategy=particles_shuffle_strategy,
+                               shuffle_during=particles_shuffle_during)
+    # compile AE
+    model.compile(optimizer=Adam(lr=lr, amsgrad=True),
+        loss=make_mse)
     return model
