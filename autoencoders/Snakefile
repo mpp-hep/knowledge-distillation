@@ -124,3 +124,93 @@ rule kd_graph_plot:
                                 --output-dir {params.plots} \
                                 --signal {input.signal}'
 
+
+rule co_train:
+    input:
+        data = config['dataset'],
+    params:
+        dir = 'cotrain/'
+    shell:
+        'mkdir -p cotrain;'
+        'python co_train.py --data-file {input.data} \
+                            --output-dir {params.dir}'
+
+
+rule co_train_results:
+    input:
+        data = config['dataset'],
+    params:
+        train_loss = 'cotrain/l1_ae_train_loss.h5',
+        test_loss = 'cotrain/l1_ae_test_loss.h5',
+        signal_loss = 'cotrain/l1_ae_signal_loss.h5',
+        result = 'cotrain/student_result.h5',
+        dir = 'cotrain/'
+    shell:
+        'mkdir -p cotrain;'
+        'python co_train_results.py --data-file {input.data} \
+                            --teacher-output-train-loss {params.train_loss} \
+                            --teacher-output-test-loss {params.test_loss} \
+                            --teacher-output-signal-loss {params.signal_loss}\
+                            --student-output-result {params.result}\
+                            --output-dir {params.dir}'
+                            
+rule co_train_plot:
+    input:
+        student = rules.co_train_results.params.result,
+        teacher = rules.co_train_results.params.test_loss,
+        signal = rules.co_train_results.params.signal_loss
+    params:
+        loss_name = 'teacher_loss',
+        plots = 'plots/cotrain/'
+    shell:
+        'mkdir -p {params.plots};'
+        'python plot_results.py --student {input.student} \
+                                --teacher {input.teacher} \
+                                --teacher-loss-name {params.loss_name} \
+                                --output-dir {params.plots} \
+                                --signal {input.signal}'
+                                
+rule co_train_latent:
+    input:
+        data = config['dataset'],
+    params:
+        dir = 'cotrain_latent/'
+    shell:
+        'mkdir -p cotrain_latent;'
+        'python co_train.py --data-file {input.data} \
+                            --output-dir {params.dir}\
+                            --include-latent-loss True'
+                            
+rule co_train_latent_results:
+    input:
+        data = config['dataset'],
+    params:
+        train_loss = 'cotrain_latent/l1_ae_train_loss.h5',
+        test_loss = 'cotrain_latent/l1_ae_test_loss.h5',
+        signal_loss = 'cotrain_latent/l1_ae_signal_loss.h5',
+        result = 'cotrain_latent/student_result.h5',
+        dir = 'cotrain_latent/'
+    shell:
+        'mkdir -p cotrain_latent;'
+        'python co_train_results.py --data-file {input.data} \
+                            --teacher-output-train-loss {params.train_loss} \
+                            --teacher-output-test-loss {params.test_loss} \
+                            --teacher-output-signal-loss {params.signal_loss}\
+                            --student-output-result {params.result}\
+                            --output-dir {params.dir}'
+                            
+rule co_train_latent_plot:
+    input:
+        student = rules.co_train_latent_results.params.result,
+        teacher = rules.co_train_latent_results.params.test_loss,
+        signal = rules.co_train_latent_results.params.signal_loss
+    params:
+        loss_name = 'teacher_loss',
+        plots = 'plots/cotrain_latent/'
+    shell:
+        'mkdir -p {params.plots};'
+        'python plot_results.py --student {input.student} \
+                                --teacher {input.teacher} \
+                                --teacher-loss-name {params.loss_name} \
+                                --output-dir {params.plots} \
+                                --signal {input.signal}'

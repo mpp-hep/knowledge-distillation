@@ -11,7 +11,12 @@ from tensorflow.keras.layers import (
     BatchNormalization,
     Flatten,
     Activation,
-    Concatenate
+    Concatenate,
+    ZeroPadding2D,
+    Reshape,
+    Conv2D,
+    AveragePooling2D,
+    UpSampling2D,
     )
 from qkeras import (
     QDense,
@@ -101,7 +106,7 @@ class ModelWithShuffling(tf.keras.Model):
     return out
 
 
-def student_model(image_shape, node_size, quantize, dropout):
+def student_model(image_shape, node_size, quantize, dropout, expose_latent=False):
     inp = Input(shape=(image_shape[1:]))
     x = Flatten()(inp)
     x = BatchNormalization()(x)
@@ -121,6 +126,7 @@ def student_model(image_shape, node_size, quantize, dropout):
         bias_quantizer = "quantized_bits(6,0,0,alpha=1)")(x) \
         if quantize else \
         Dense(node_size)(x)
+    latent = x
     if dropout:
         x = Dropout(dropout)(x)
     x = BatchNormalization()(x)
@@ -146,12 +152,29 @@ def student_model(image_shape, node_size, quantize, dropout):
     out = QActivation("quantized_relu(6,0)")(x) \
         if quantize else \
         Activation('relu')(x)
-    main_model = Model(inputs=inp, outputs=out,name='main_model')
-    main_model.summary()
-    return main_model
+    if not expose_latent:
+        main_model = Model(inputs=inp, outputs=out,name='main_model')
+        main_model.summary()
+        return main_model
+    else:
+        main_model = Model(inputs=inp, outputs=(latent, out),name='main_model')
+        main_model.summary()
+        return main_model
 
+# number of integer bits for each bit width
+QUANT_INT = {
+    0: 0,
+    2: 1,
+    4: 2,
+    6: 2,
+    8: 3,
+    10: 3,
+    12: 4,
+    14: 4,
+    16: 6
+    }
 
-def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned'):
+def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', expose_latent=False):
     int_size = QUANT_INT[quant_size]
     # encoder
     input_encoder = Input(shape=image_shape[1:], name='encoder_input')
@@ -237,8 +260,13 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned'):
         decoder = decoder_pruned
 
     # ae
-    ae_outputs = decoder(encoder(input_encoder))
-    autoencoder = Model(inputs=input_encoder, outputs=ae_outputs)
+    if expose_latent:
+        latent = encoder(input_encoder)
+        ae_outputs = decoder(latent)
+        autoencoder = Model(inputs=input_encoder, outputs=(latent, ae_outputs))
+    else:
+        ae_outputs = decoder(encoder(input_encoder))
+        autoencoder = Model(inputs=input_encoder, outputs=ae_outputs)
     autoencoder.summary()
     # load weights
     if pruning=='pruned':
@@ -250,9 +278,9 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned'):
 
 
 def student(image_shape, lr, dropout, node_size, distillation_loss,
-    particles_shuffle_strategy, particles_shuffle_during):
+    particles_shuffle_strategy, particles_shuffle_during, expose_latent=False):
     quantize = False
-    model = ModelWithShuffling(model=student_model(image_shape, node_size, quantize, dropout),
+    model = ModelWithShuffling(model=student_model(image_shape, node_size, quantize, dropout, expose_latent=expose_latent),
                                shuffle_strategy=particles_shuffle_strategy,
                                shuffle_during=particles_shuffle_during)
     # compile AE
@@ -260,8 +288,8 @@ def student(image_shape, lr, dropout, node_size, distillation_loss,
         loss=distillation_loss)
     return model
 
-def teacher(image_shape, lr, particles_shuffle_strategy, particles_shuffle_during):
-    model = ModelWithShuffling(model=teacher_model(image_shape, latent_dim=8),
+def teacher(image_shape, lr, particles_shuffle_strategy, particles_shuffle_during, expose_latent=False):
+    model = ModelWithShuffling(model=teacher_model(image_shape, latent_dim=8, expose_latent=expose_latent),
                                shuffle_strategy=particles_shuffle_strategy,
                                shuffle_during=particles_shuffle_during)
     # compile AE
