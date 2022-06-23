@@ -130,7 +130,7 @@ dmypy.json
 
 
 # Local
-plots/
+plots*/
 output/
 *.snakemake*
 *DS_Store

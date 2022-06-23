@@ -21,6 +21,7 @@ config = {
     'dropout': None,
     'node_size': 32,
     'distillation_loss': 'mae',
+    'quant_size': 0, # means full precision is used
     'particles_shuffle_strategy': 'none',
     'particles_shuffle_during': 'never',
     'batch_size': 1024
@@ -111,6 +112,7 @@ def teacher_student_cotrain(data_file,
         config['dropout'],
         config['node_size'],
         config['distillation_loss'],
+        config['quant_size'],
         config['particles_shuffle_strategy'],
         config['particles_shuffle_during'],
         expose_latent=True
@@ -120,6 +122,7 @@ def teacher_student_cotrain(data_file,
     teacher_model = teacher(
         x_train.shape,
         3e-3,
+        config['quant_size'],
         config['particles_shuffle_strategy'],
         config['particles_shuffle_during'],
         expose_latent=True
