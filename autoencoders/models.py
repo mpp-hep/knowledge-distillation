@@ -297,7 +297,7 @@ def student(image_shape, lr, dropout, node_size, distillation_loss, quant_size,
 
 def teacher(image_shape, lr, quant_size, particles_shuffle_strategy,
     particles_shuffle_during, expose_latent=False):
-    model = ModelWithShuffling(model=teacher_model(image_shape, quant_size=quant_size, expose_latent=expose_latent),
+    model = ModelWithShuffling(model=teacher_model(image_shape, 8, quant_size=quant_size, expose_latent=expose_latent),
                                shuffle_strategy=particles_shuffle_strategy,
                                shuffle_during=particles_shuffle_during)
     # compile AE
