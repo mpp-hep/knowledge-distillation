@@ -78,6 +78,17 @@ rule kd_ae_l1_plot:
                                 --output-dir {output.plots} \
                                 --signal {input.signal}'
 
+rule tune_student_kd_ae_l1:
+    input:
+        data = rules.reformat_ae_l1_data.output.train_loss
+    params:
+        distillation_loss = 'mae'
+    output:
+    shell:
+        'python tune_hyperparameters.py --input-file {input.data} \
+                                        --distillation-loss {params.distillation_loss} '
+
+
 rule quantized_kd_ae_l1_plot:
     ''' Specify to which bit to quantize the student
         use 0 for full precision

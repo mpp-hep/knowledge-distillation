@@ -119,9 +119,9 @@ class ModelWithShuffling(tf.keras.Model):
     return out
 
 
-def student_model(image_shape, node_size, quant_size, dropout, expose_latent=False):
+def student_model(input_shape, node_size, quant_size, dropout, expose_latent=False):
     int_size = QUANT_INT[quant_size]
-    inp = Input(shape=(image_shape[1:]))
+    inp = Input(shape=(input_shape[1:]))
     if quant_size!=0:
         quantized_inputs = QActivation(f'quantized_bits(16,10,0,alpha=1)')(inp)
         x = Flatten()(quantized_inputs)
