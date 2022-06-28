@@ -52,6 +52,7 @@ def optimisation(input_file, distillation_loss):
           objective='val_loss',
           max_trials=10,
           overwrite=True,
+          directory='output/hyper_tuning',
           )
     tuner.search_space_summary()
     tuner.search(
