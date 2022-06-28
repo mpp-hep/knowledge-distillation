@@ -9,6 +9,11 @@ import setGPU
 
 from tensorflow.keras.optimizers import Adam
 from kerastuner import HyperParameters
+from tensorboard import program
+from tensorflow.keras.callbacks import TensorBoard
+
+tracking_address = '/tmp/tb_logs' # the path of your log file.
+
 
 from models import student_model
 
@@ -52,26 +57,36 @@ def optimisation(input_file, distillation_loss):
           objective='val_loss',
           max_trials=10,
           overwrite=True,
-          directory='output/hyper_tuning',
+          directory='hyper_tuning',
           )
     tuner.search_space_summary()
     tuner.search(
         x=x_train,
         y=y_train,
-        epochs=1,
-        validation_split=0.2
+        epochs=5,
+        validation_split=0.2,
+        # Use the TensorBoard callback.
+        # The logs will be write to "/tmp/tb_logs".
+        callbacks=[TensorBoard(tracking_address)]
         )
 
     tuner.results_summary()
     logging.info('Get the optimal hyperparameters')
 
-    best_hps = tuner.get_best_hyperparameters(num_trials=5)[0]
+    best_hps = tuner.get_best_hyperparameters(num_trials=10)[0]
 
     logging.info('Getting and printing best hyperparameters!')
     print(best_hps)
 
 
 if __name__ == '__main__':
+
+    # tb = program.TensorBoard()
+    # tb.configure(argv=[None, '--logdir', tracking_address])
+    # url = tb.launch()
+    # print(f"Tensorflow listening on {url}")
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-file', type=str, help='input file', required=True)
     parser.add_argument('--distillation-loss', type=str, default='mse', help='Loss to use for distillation')
