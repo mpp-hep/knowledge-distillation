@@ -2,7 +2,7 @@ import os
 import h5py
 import logging
 import numpy as np
-import kerastuner
+import keras_tuner
 import tensorflow as tf
 import argparse
 import setGPU
@@ -11,14 +11,20 @@ from tensorflow import keras
 
 from tensorflow.keras import layers
 from tensorflow.keras.optimizers import Adam
-from kerastuner import HyperParameters
+from keras_tuner import HyperParameters
 from tensorboard import program
-from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import (
+    EarlyStopping,
+    ReduceLROnPlateau,
+    TensorBoard
+    )
 
-tracking_address = '/tmp/tb_logs' # the path of your log file for TensorBoard
+tracking_address = 'output/tb_logs' # the path of your log file for TensorBoard
+
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 
-class HyperStudent(kerastuner.HyperModel):
+class HyperStudent(keras_tuner.HyperModel):
 
     def __init__(self, input_shape, distillation_loss):
         self.input_shape = input_shape
@@ -29,7 +35,7 @@ class HyperStudent(kerastuner.HyperModel):
 
         inputs = keras.Input(shape=self.input_shape[1:])
         x = layers.Flatten()(inputs)
-        # Number of layers of the MLP is a hyperparameter.
+        # Number of hidden layers of the MLP is a hyperparameter.
         for i in range(hp.Int('mlp_layers', 2, 4)):
             # Number of units of each layer are
             # different hyperparameters with different names.
@@ -59,28 +65,33 @@ def optimisation(input_file, distillation_loss):
         y_train = np.array(f['teacher_loss'])
 
     hypermodel = HyperStudent(x_train.shape, distillation_loss)
-    tuner = kerastuner.RandomSearch(
+    tuner = keras_tuner.RandomSearch(
           hypermodel,
           objective='val_loss',
-          max_trials=10,
+          max_trials=20,
           overwrite=True,
           directory='output/hyper_tuning',
           )
     tuner.search_space_summary()
+    # Use the TensorBoard callback.
+    # The logs will be write to "/tmp/tb_logs".
+    callbacks=[
+        TensorBoard(log_dir=tracking_address, histogram_freq=1),
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_lr=1e-9)
+        ]
     tuner.search(
         x=x_train,
         y=y_train,
-        epochs=10,
-        validation_split=0.5,
-        # Use the TensorBoard callback.
-        # The logs will be write to "/tmp/tb_logs".
-        callbacks=[TensorBoard(tracking_address)]
+        epochs=1,
+        validation_split=0.2,
+        callbacks=callbacks
         )
 
     tuner.results_summary()
     logging.info('Get the optimal hyperparameters')
 
-    best_hps = tuner.get_best_hyperparameters(num_trials=20)[0]
+    best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     logging.info('Getting and printing best hyperparameters!')
     print(best_hps)
