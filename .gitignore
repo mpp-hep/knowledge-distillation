@@ -134,3 +134,4 @@ plots*/
 output/
 *.snakemake*
 *DS_Store
+hyper_tuning/

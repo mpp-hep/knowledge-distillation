@@ -90,7 +90,7 @@ rule tune_student_kd_ae_l1:
 
 rule run_tensorboard:
     shell:
-        'tensorboard --logdir=/tmp/tb_logs  --port=8896'
+        'tensorboard --logdir=output/tb_logs  --port=8896'
 
 rule quantized_kd_ae_l1_plot:
     ''' Specify to which bit to quantize the student
