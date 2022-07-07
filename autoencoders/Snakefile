@@ -21,11 +21,39 @@ rule reformat_ae_l1_data:
                                        --output-signal-loss {output.signal_loss}\
                                        --log-loss {params.log_loss}'
 
+
+rule apply_selective_sampling:
+    input:
+        data_bg = rules.reformat_ae_l1_data.output.train_loss,
+        data_sig = rules.reformat_ae_l1_data.output.signal_loss
+    params:
+        signal_name = '"A to 4 leptons"',
+        signal_fraction = 0.25,
+        fit_threshold = 1.2,
+        plots = 'plots/selective_subsampling/'
+    output:
+        train_loss_bg = 'output/l1_ae_train_loss_selective.h5',
+        train_loss_bg_sig = 'output/l1_ae_train_loss_selective_bg_plus_sig.h5',
+        discarded_test_loss = 'output/l1_ae_train_loss_discarded.h5',
+        signal_loss = 'output/l1_ae_signal_loss_selective.h5'
+    shell:
+        'mkdir -p {params.plots};'
+        'python selective_sampling.py --data-file-bg {input.data_bg} \
+                                       --data-file-sig {input.data_sig} \
+                                       --signal-name {params.signal_name} \
+                                       --signal-fraction {params.signal_fraction} \
+                                       --fit-threshold {params.fit_threshold} \
+                                       --outfile-train-loss-bg {output.train_loss_bg} \
+                                       --outfile-train-loss-bg-sig {output.train_loss_bg_sig} \
+                                       --outfile-discarded-test-loss {output.discarded_test_loss} \
+                                       --outfile-signal-loss {output.signal_loss} \
+                                       --plot-dir {params.plots}'
+
 rule kd_ae_l1_train:
     input:
-        train = rules.reformat_ae_l1_data.output.train_loss,
+        train = rules.apply_selective_sampling.output.train_loss_bg_sig,
         test = rules.reformat_ae_l1_data.output.test_loss,
-        signal = rules.reformat_ae_l1_data.output.signal_loss,
+        signal = rules.apply_selective_sampling.output.signal_loss,
     params:
         data_name = 'data',
         loss_name = 'teacher_loss',
@@ -61,7 +89,7 @@ rule kd_ae_l1_plot:
     input:
         student = rules.kd_ae_l1_train.output.result,
         teacher = rules.reformat_ae_l1_data.output.test_loss,
-        signal = rules.reformat_ae_l1_data.output.signal_loss
+        signal = rules.apply_selective_sampling.output.signal_loss
     params:
         loss_name = 'teacher_loss',
         plots = 'plots/ae_l1/'
