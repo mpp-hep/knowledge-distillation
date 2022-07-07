@@ -23,8 +23,8 @@ from plot_results import BSM_SAMPLES
 def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
     data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
     output_history, batch_size, n_epochs, distillation_loss, dropout,
-    learning_rate, node_size, output_result, output_dir,
-    particles_shuffle_strategy,particles_shuffle_during):
+    learning_rate, node_size, quant_size, output_result, output_dir,
+    particles_shuffle_strategy, particles_shuffle_during):
 
     # load teacher's loss for training
     with h5py.File(input_train_file, 'r') as f:
@@ -39,6 +39,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         dropout,
         node_size,
         distillation_loss,
+        quant_size,
         particles_shuffle_strategy,
         particles_shuffle_during
         )
@@ -139,6 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=None, help='Dropout rate')
     parser.add_argument('--learning-rate', type=float, default=3E-3, help='Learning rate')
     parser.add_argument('--node-size', default=32, type=int, help='To use smaller student model')
+    parser.add_argument('--quant-size', default=0, type=int, help='How much bits to use for quantization; 0 means full precision :D')
     parser.add_argument('--output-result', type=str, help='Output file with results', required=True)
     parser.add_argument('--output-dir', type=str, default='plots/')
     parser.add_argument('--particles-shuffle-strategy', type=str, default='none',choices=['none','shuffle_all', 'shuffle_within_between_pid','shuffle_within_pid'], help='How to shuffle particles : none / shuffle_all / shuffle_within_between_pid / shuffle_within_pid')
