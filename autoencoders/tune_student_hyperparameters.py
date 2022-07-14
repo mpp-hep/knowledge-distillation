@@ -93,7 +93,7 @@ def optimisation(input_file, distillation_loss):
     tuner = keras_tuner.RandomSearch(
           hypermodel,
           objective='val_loss',
-          max_trials=1,
+          max_trials=len(hypermodel.model_configurations),
           overwrite=True,
           directory='output/hyper_tuning',
           )
