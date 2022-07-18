@@ -131,7 +131,7 @@ dmypy.json
 
 # Local
 plots*/
-output/
+autoencoders/output
 *.snakemake*
 *DS_Store
 hyper_tuning/
