@@ -36,7 +36,7 @@ class HyperTeacher(keras_tuner.HyperModel):
         num_layers = hp.Choice('num_layers', values=[2, 3])
 
         if num_layers==3:
-            first_conv2d = hp.Choice('conv2d_1', values=[256, 128])
+            first_conv2d = hp.Choice('conv2d', values=[256, 128])
             second_conv2d = int(first_conv2d/2)
             third_conv2d = int(second_conv2d/2)
         else:
@@ -96,6 +96,7 @@ def optimisation(args):
     tuner = keras_tuner.RandomSearch(
           hypermodel,
           objective='val_loss',
+          max_model_size=500000,
           max_trials=20,
           overwrite=True,
           directory='output/hyper_tuning',
@@ -112,6 +113,7 @@ def optimisation(args):
         x=x_test,
         y=y_test,
         epochs=50,
+        batch_size=1024,
         validation_split=0.2,
         callbacks=callbacks
         )
