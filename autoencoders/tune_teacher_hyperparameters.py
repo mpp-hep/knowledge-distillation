@@ -1,5 +1,6 @@
 import os
 import h5py
+import pickle
 import logging
 import numpy as np
 import keras_tuner
@@ -20,10 +21,7 @@ from tensorflow.keras.callbacks import (
     )
 
 from models import make_mse
-
 tracking_address = 'output/tb_logs' # the path of your log file for TensorBoard
-
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 
 class HyperTeacher(keras_tuner.HyperModel):
@@ -35,86 +33,70 @@ class HyperTeacher(keras_tuner.HyperModel):
     def build(self, hp):
 
         latent_dim = 8
+        num_layers = hp.Choice('num_layers', values=[2, 3])
+
+        if num_layers==3:
+            first_conv2d = hp.Choice('conv2d_1', values=[256, 128])
+            second_conv2d = int(first_conv2d/2)
+            third_conv2d = int(second_conv2d/2)
+        else:
+            first_conv2d = hp.Choice('conv2d_1', values=[2*256, 2*128])
+            second_conv2d = int(first_conv2d/2)
 
         # encoder
-        input_encoder = Input(shape=self.input_shape[1:], name='encoder_input')
-        x = ZeroPadding2D(((1,0),(0,0)))(input_encoder)
-        x = BatchNormalization()(x)
-        x = Conv2D(16, kernel_size=(3,3), use_bias=False, padding='valid')(x)
-        x = Activation('relu')(x)
-        x = AveragePooling2D(pool_size=(3, 1))(x)
-        x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x)
-        x = Activation('relu')(x)
-        x = AveragePooling2D(pool_size=(3, 1))(x)
-        x = Flatten()(x)
-        enc = Dense(latent_dim, name='latent_dense')(x)
-
-        encoder = Model(inputs=input_encoder, outputs=enc, name='encoder_CNN')
-        encoder.summary()
-
+        input_encoder = keras.Input(shape=self.input_shape[1:], name='encoder_input')
+        x = layers.ZeroPadding2D(((1,0),(0,0)))(input_encoder)
+        x = layers.BatchNormalization()(x)
+        x = layers.Conv2D(first_conv2d, kernel_size=(3,3), use_bias=False, padding='valid')(x)
+        x = layers.Activation('relu')(x)
+        x = layers.AveragePooling2D(pool_size=(3, 1))(x)
+        x = layers.Conv2D(second_conv2d, kernel_size=(3,1), use_bias=False, padding='same')(x)
+        x = layers.Activation('relu')(x)
+        x = layers.AveragePooling2D(pool_size=(3, 1))(x)
+        if num_layers==3:
+            x = layers.Conv2D(third_conv2d, kernel_size=(1,1), use_bias=False, padding='same')(x)
+            x = layers.Activation('relu')(x)
+            x = layers.AveragePooling2D(pool_size=(2, 1))(x)
+        x = layers.Flatten()(x)
+        enc = layers.Dense(latent_dim, name='latent_dense')(x)
         # decoder
-        input_decoder = Input(shape=(latent_dim,), name='decoder_input')
-        x = Dense(64)(input_decoder)
-        x = Activation('relu')(x)
-        x = Reshape((2,1,32))(x)
-        x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x)
-        x = Activation('relu')(x)
-        x = UpSampling2D((3,1))(x)
-        x = ZeroPadding2D(((0,0),(1,1)))(x)
-        x = Conv2D(16, kernel_size=(3,1), use_bias=False, padding='same')(x)
-        x = Activation('relu')(x)
-        x = UpSampling2D((3,1))(x)
-        x = ZeroPadding2D(((1,0),(0,0)))(x)
-        dec = Conv2D(1, kernel_size=(3,3), use_bias=False, padding='same')(x)
-        decoder = Model(inputs=input_decoder, outputs=dec)
-        decoder.summary()
-        # vae
-        vae_outputs = decoder(encoder(input_encoder)[2])
-        vae = Model(input_encoder, vae_outputs, name='vae')
-        vae.summary()
-        # compile VAE
-        vae.compile(
-            optimizer=Adam(
-                lr=3E-3,
-                amsgrad=True),
-            loss=make_mse
-            )
+        x = layers.Dense(third_conv2d if num_layers==3 else second_conv2d)(enc)
+        x = layers.Activation('relu')(x)
+        if num_layers==3:
+            x = layers.Reshape((2,1,int(third_conv2d/2)))(x)
+            x = layers.Conv2D(third_conv2d, kernel_size=(3,1), use_bias=False, padding='same')(x)
+            x = layers.Activation('relu')(x)
 
-        return vae
+        x = layers.Reshape((2,1,int(second_conv2d/2)))(x)
+        x = layers.Conv2D(second_conv2d, kernel_size=(3,3), use_bias=False, padding='same')(x)
+        x = layers.Activation('relu')(x)
+        x = layers.UpSampling2D((3,1))(x)
+        x = layers.ZeroPadding2D(((0,0),(1,1)))(x)
+        x = layers.Conv2D(first_conv2d, kernel_size=(3,1), use_bias=False, padding='same')(x)
+        x = layers.Activation('relu')(x)
+        x = layers.UpSampling2D((3,1))(x)
+        x = layers.ZeroPadding2D(((1,0),(0,0)))(x)
+        dec = layers.Conv2D(1, kernel_size=(3,3), use_bias=False, padding='same')(x)
+        # ae
+        ae = keras.Model(input_encoder, dec, name='ae')
+        ae.summary()
+        # compile ae
+        ae.compile(optimizer=Adam(lr=3E-3, amsgrad=True), loss=make_mse)
 
-        # inputs = keras.Input(shape=self.input_shape[1:])
-        # x = layers.Flatten()(inputs)
-        # # Number of hidden layers of the MLP is a hyperparameter.
-        # for i in range(hp.Int('mlp_layers', 2, 4)):
-        #     # Number of units of each layer are
-        #     # different hyperparameters with different names.
-        #     output_node = layers.Dense(
-        #         units=hp.Choice(f'units_{i}', [4, 8, 16, 32], default=32),
-        #         activation='relu',
-        #     )(x)
-
-        # # The last layer contains 1 unit, which
-        # # represents the learned loss value
-        # outputs = layers.Dense(units=1, activation='relu')(x)
-        # hyper_student = keras.Model(inputs=inputs, outputs=outputs)
-
-        # hyper_student.compile(
-        #     optimizer=Adam(lr=3E-3, amsgrad=True),
-        #     loss=self.distillation_loss
-        #     )
+        return ae
 
 
 def optimisation(args):
 
-    # load teacher's loss for training
-    with h5py.File(args.input_file, 'r') as f:
-        x_train = np.array(f['data'][:,:,:3])
+    # load data
+    with open(args.input_file, 'rb') as f:
+        _, _, x_test, y_test, _, _ = pickle.load(f)
 
-    hypermodel = HyperTeacher(x_train.shape)
+    hypermodel = HyperTeacher(x_test.shape)
     tuner = keras_tuner.RandomSearch(
           hypermodel,
           objective='val_loss',
-          max_trials=len(hypermodel.model_configurations),
+          max_trials=20,
           overwrite=True,
           directory='output/hyper_tuning',
           )
@@ -127,9 +109,9 @@ def optimisation(args):
         ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_lr=1e-9)
         ]
     tuner.search(
-        x=x_train,
-        y=y_train,
-        epochs=1,
+        x=x_test,
+        y=y_test,
+        epochs=50,
         validation_split=0.2,
         callbacks=callbacks
         )
