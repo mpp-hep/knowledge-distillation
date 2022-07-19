@@ -40,7 +40,7 @@ class HyperTeacher(keras_tuner.HyperModel):
             second_conv2d = int(first_conv2d/2)
             third_conv2d = int(second_conv2d/2)
         else:
-            first_conv2d = hp.Choice('conv2d_1', values=[2*256, 2*128])
+            first_conv2d = hp.Choice('conv2d_1', values=[256, 128])
             second_conv2d = int(first_conv2d/2)
 
         # encoder

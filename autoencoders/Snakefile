@@ -1,5 +1,32 @@
 configfile: 'config.yaml'
 
+rule prepare_data:
+    ''' Prepare data for training'''
+    input:
+        script = 'prepare_data.py',
+        qcd = config['background'],
+    output:
+        config['dataset']
+    params:
+        leptoquarks = config['leptoquarks'],
+        ato4l = config['ato4l'],
+        hChToTauNu = config['hChToTauNu'],
+        hToTauTau = config['hToTauTau'],
+        monojet = config['monojet']
+    shell:
+        'python {input.script} --output-file {output} \
+                               --input-file {input.qcd} \
+                               --events {wildcards.events} \
+                               --input-bsm {params.leptoquarks} \
+                               --input-bsm {params.ato4l} \
+                               --input-bsm {params.hChToTauNu} \
+                               --input-bsm {params.hToTauTau} \
+                               --input-bsm {params.monojet}'
+
+rule prepare_data_all:
+    input:
+        expand(rules.prepare_data.output, events=-1)
+
 rule reformat_ae_l1_data:
     input:
         data = config['dataset'],
@@ -27,6 +54,7 @@ rule tune_teacher_kd_ae_l1:
     params:
     output:
     shell:
+        'rm output/tb_logs/*; '
         'python tune_teacher_hyperparameters.py {input.data} '
 
 rule run_tensorboard:
