@@ -53,7 +53,8 @@ def reformat_ae_l1_data(data_file, teacher_input_json, teacher_input_h5,
 
     # load data
     with open(data_file, 'rb') as f:
-        x_train, y_train, x_test, y_test, all_bsm_data, pt_scaler = pickle.load(f)
+        x_train, y_train, x_test, y_test, all_bsm_data, pt_scaler, \
+        ids_train, ids_test, ids_names = pickle.load(f)
 
     # load teacher model
     with open(teacher_input_json, 'r') as jsonfile:
