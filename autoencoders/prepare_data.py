@@ -6,13 +6,22 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 import pickle
 
+
+def check_proportions(dataset):
+    for i, ids in enumerate(['W', 'QCD', 'Z', 'tt']):
+        print(f'Percent of {ids} is {dataset[dataset==i].shape[0]/dataset.shape[0]*100:0.2f}')
+
 def filter_no_leptons(data, background_ID=None):
     is_ele = data[:,1,0] > 23
     is_mu = data[:,5,0] > 23
     is_lep = (is_ele+is_mu) > 0
     data_filtered = data[is_lep]
     if background_ID is not None:
+        print(f'IDs before filtering:')
+        check_proportions(background_ID)
         background_ID_filtered = background_ID[is_lep]
+        print(f'IDs after filtering: ')
+        check_proportions(background_ID_filtered)
         return data_filtered, background_ID_filtered
     return data_filtered
 
