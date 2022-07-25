@@ -19,21 +19,32 @@ from tensorflow.keras.callbacks import (
     TensorBoard
     )
 
+import os
+ 
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
+from qkeras.qlayers import QDense, QActivation
+from qkeras.quantizers import quantized_bits, quantized_relu
+
 tracking_address = '../output/tb_logs' # the path of your log file for TensorBoard
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 class HyperStudent(keras_tuner.HyperModel):
 
-    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,5000)):
+    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,5000)):#  4500,5000
         self.input_shape = input_shape
         self.distillation_loss = distillation_loss
 
         self.num_layers = [2,3,4]
         self.num_params = [4,8,16,32, 64]
-
+        self.quant_bits = [[4,1],[8,3],[16,6]]
+        self.quant_idx = [1,2,5] # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
         model_configurations = []
+        self.bits_configurations = []
         self.model_configurations = []
+        self.num_conf_perNlayer = []
+        self.idx_confs_perNlayer = [0]
 
         for nl in self.num_layers:
             grid_choices = np.tile(self.num_params, (nl,1))
@@ -41,11 +52,32 @@ class HyperStudent(keras_tuner.HyperModel):
 
             model_configurations.append(configs.tolist())
 
+        for nl in self.num_layers:
+            # Creating all possible quantization configurations given the number of layers and bitwidths
+            grid_choices = np.tile(self.quant_idx, (nl,1))
+            configs = np.array(np.meshgrid(*grid_choices)).T.reshape(-1, nl,1)
+            configs = np.where(configs == 1, [4,1], configs)
+            configs = np.where(configs == 2, [8,3], configs)
+            configs = np.where(configs == 5, [16,6], configs)
+            self.bits_configurations.append(configs.tolist())
+
         model_configurations = [num for sublist in model_configurations for num in sublist]
+
+        lastconflen = 0
+        
         for config in model_configurations:
             params = self.compute_model_params(config)
             if params <= param_threshold[1] and params >= param_threshold[0]:
+                print(config)
                 self.model_configurations.append(config)
+                if len(config) != lastconflen and lastconflen != 0:
+                    # Counting the number of configurations for each number of layers (it is very likely that there is a better way to do it)
+                    self.idx_confs_perNlayer.append(len(self.model_configurations) - 1) 
+                lastconflen = len(config)
+        self.idx_confs_perNlayer.append(len(self.model_configurations))
+        self.num_conf_perNlayer = [j-i for i, j in zip(self.idx_confs_perNlayer[:-1], self.idx_confs_perNlayer[1:])]
+    
+
         print('Total feasible configurations: ', len(self.model_configurations))
 
     def compute_model_params(self, config):
@@ -59,27 +91,75 @@ class HyperStudent(keras_tuner.HyperModel):
 
     def build(self, hp):
 
+        quantized = True
         inputs = keras.Input(shape=self.input_shape[1:])
         x = layers.Flatten()(inputs)
 
         config_index = hp.Int("config_indx", min_value=0, max_value=len(self.model_configurations)-1, step=1)
+        bits_index = 0
+        selected_bits_conf = []
+        #next(x for x in the_iterable if x > 3)
+        if quantized:
+            
+            #print("bits")
+            #print(selected_bits_conf)
+            #for i in self.idx_confs_perNlayer[1:]:
+            #    print("cond index per nlayer for HP/////////////")
+            #    print(i)
+            #    with hp.conditional_scope("config_indx", [*range(i)]):
+            #        selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
+            #        bits_index = hp.Int("bits_indx", min_value=0, max_value=len(selected_bits_conf)-1, step=1)
+            #        print(len(selected_bits_conf)-1)
+            #        if config_index in [*range(i)]:
+            #            break
 
+            for i in self.idx_confs_perNlayer[1:]:
+                # Selecting the set of configurations associated to the # of layers of config_index and setting up the index of the quantization configurations accordingly
+                if config_index in [*range(i)]:
+                    selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
+                    bits_index = hp.Int("bits_indx", min_value=0, max_value=len(selected_bits_conf)-1, step=1)
+                    print(len(selected_bits_conf)-1)
+                    
+                    break
+
+        i = 0
         # Number of hidden layers of the MLP is a hyperparameter.
         for units in self.model_configurations[config_index]:
             # Number of units of each layer are
             # different hyperparameters with different names.
-            x = layers.Dense(units=units,activation='relu')(x)
-
+            
+            if quantized:
+                print("Bitwidth of QDense layer # ",i)
+                print(selected_bits_conf[bits_index][i])
+                x = QDense(units=units, activation=quantized_relu(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1]), \
+                        kernel_quantizer=quantized_bits(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1],alpha=1), \
+                        bias_quantizer=quantized_bits(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1],alpha=1), kernel_initializer='random_normal')(x)
+                i += 1
+            else:
+                x = layers.Dense(units=units,activation='relu')(x)
+            
+        
         # The last layer contains 1 unit, which
         # represents the learned loss value
-        outputs = layers.Dense(units=1, activation='relu')(x)
+        
+        
+        if quantized:
+            final_quant_idx = hp.Int("final_quant_idx", min_value=0, max_value = len(self.quant_bits)-1, step=1)
+            final_quant = self.quant_bits[final_quant_idx]
+            print("Bitwidth of final QDense layer")
+            print(final_quant)
+            outputs = QDense(1,kernel_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1),bias_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1))(x)
+            outputs = QActivation(activation=quantized_relu(final_quant[0],final_quant[1]))(outputs)
+        else:
+            outputs = layers.Dense(units=1, activation='relu')(x)
+
         hyper_student = keras.Model(inputs=inputs, outputs=outputs)
 
         hyper_student.compile(
             optimizer=Adam(lr=3E-3, amsgrad=True),
             loss=self.distillation_loss
             )
-
+        hyper_student.summary()
         return hyper_student
 
 def optimisation(input_file, distillation_loss):
