@@ -1,0 +1,51 @@
+configfile: 'config.yaml'
+
+
+rule prepare_L1_regression_data:
+    input:
+        data = config['dataset'],
+        jet_corr_dir = config['jet_corr_dir']
+    output:
+        outfile_train = 'output/l1_regression_train.h5',
+        outfile_test = 'output/l1_regression_test.h5'
+    params:
+        train_test_split = 0.8,
+        jet_pt_filename = config['jet_pt_filename'],
+        jet_eta_filename = config['jet_eta_filename'],
+        plots = 'plot/',
+    shell:
+        'mkdir -p output;'
+        'mkdir -p {params.plots};'
+        'python create_L1regression_data.py --data_file {input.data} \
+                                            --outfile_train {output.outfile_train}\
+                                            --outfile_test {output.outfile_test}\
+                                            --plot_dir {params.plots}\
+                                            --jet_pt_filename {params.jet_pt_filename}\
+                                            --jet_eta_filename {params.jet_eta_filename}\
+                                            --jet_corr_dir {input.jet_corr_dir}\
+                                            --train_test_split {params.train_test_split}'
+
+rule selective_sampling_jets_met:
+    input:
+        data_train = rules.prepare_L1_regression_data.output.outfile_train,
+    params:
+        fractions_to_keep = '"0."',
+        mode = '"=="',
+        met_sampling = True,
+        met_threshold = 180,
+        txt_outfile = 'output/jet_summary_stat.txt',
+        plots = 'plot/',
+    output:
+        outfile = 'output/l1_regression_train_selective.h5',
+        outfile_discarded = 'output/l1_regression_train_discarded.h5'
+    shell:
+        'python selective_sampling_jets_met.py --data_file {input.data_train} \
+                                      --fractions_to_keep {params.fractions_to_keep}\
+                                      --mode {params.mode}\
+                                      --met_sampling {params.met_sampling}\
+                                      --met_threshold {params.met_threshold}\
+                                      --outfile {output.outfile}\
+                                      --outfile_discarded {output.outfile_discarded}\
+                                      --txt_outfile {params.txt_outfile}\
+                                      --plot_dir {params.plots}'
+                                      
