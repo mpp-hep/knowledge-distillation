@@ -83,7 +83,6 @@ class HyperStudent(keras_tuner.HyperModel):
         self.idx_confs_perNlayer.append(len(self.model_configurations))
         self.num_conf_perNlayer = [j-i for i, j in zip(self.idx_confs_perNlayer[:-1], self.idx_confs_perNlayer[1:])]
     
-        self.stopper = 0
         print('Total feasible configurations: ', len(self.model_configurations))
 
     def compute_model_params(self, config):
@@ -109,14 +108,14 @@ class HyperStudent(keras_tuner.HyperModel):
             lastrange = 0
             for i in self.idx_confs_perNlayer[1:]:
             # Selecting the set of configurations associated to the # of layers of config_index and setting up the index of the quantization configurations accordingly
-                selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[i-1])][0]
-                bits_index = hp.Int("bits_indx_" + str(len(self.model_configurations[i-1])), min_value=0, max_value=len(selected_bits_conf)-1, step=1)
+                #selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[i-1])][0]
+                bits_index = hp.Int("bits_indx_" + str(len(self.model_configurations[i-1])), min_value=0, max_value=(len(self.quant_bits)**(len(self.model_configurations[i-1])) - 1), step=1)
                 temp_idx.append(bits_index)
                 temp_idx.append(len(self.model_configurations[i-1]))
                 lastrange = i        
             lastrange = 0
 
-            # Sekectubg appropriate bit index considering the number of layers in the model configuration selected
+            # Selecting appropriate bit index considering the number of layers in the model configuration selected
             bits_index = temp_idx[::2][temp_idx[1::2].index(next(idx for idx in temp_idx[1::2] if idx == len(self.model_configurations[config_index])))]
             selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
             print("Bitwidth index selected: ", bits_index)
