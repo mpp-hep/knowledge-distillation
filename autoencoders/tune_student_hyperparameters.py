@@ -32,14 +32,22 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 class HyperStudent(keras_tuner.HyperModel):
 
-    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,5000)):#  4500,5000
+    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,5000),quantized = True):#  4500,5000
         self.input_shape = input_shape
         self.distillation_loss = distillation_loss
-
+        self.quantized = quantized
         self.num_layers = [2,3,4]
         self.num_params = [4,8,16,32, 64]
         self.quant_bits = [[4,1],[8,3],[16,6]]
-        self.quant_idx = [1,2,5] # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
+        self.quant_idx = [] 
+        # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
+        flat_quant_bits = [x for xs in self.quant_bits for x in xs]
+        for i,j in enumerate(self.quant_bits,start=1):
+            while i in flat_quant_bits or i in self.quant_idx:
+                i += 1
+            self.quant_idx.append(i)
+
+
         model_configurations = []
         self.bits_configurations = []
         self.model_configurations = []
@@ -56,9 +64,8 @@ class HyperStudent(keras_tuner.HyperModel):
             # Creating all possible quantization configurations given the number of layers and bitwidths
             grid_choices = np.tile(self.quant_idx, (nl,1))
             configs = np.array(np.meshgrid(*grid_choices)).T.reshape(-1, nl,1)
-            configs = np.where(configs == 1, [4,1], configs)
-            configs = np.where(configs == 2, [8,3], configs)
-            configs = np.where(configs == 5, [16,6], configs)
+            for i,j in zip(self.quant_idx,self.quant_bits):
+                configs = np.where(configs == i, j, configs)
             self.bits_configurations.append(configs.tolist())
 
         model_configurations = [num for sublist in model_configurations for num in sublist]
@@ -68,7 +75,6 @@ class HyperStudent(keras_tuner.HyperModel):
         for config in model_configurations:
             params = self.compute_model_params(config)
             if params <= param_threshold[1] and params >= param_threshold[0]:
-                print(config)
                 self.model_configurations.append(config)
                 if len(config) != lastconflen and lastconflen != 0:
                     # Counting the number of configurations for each number of layers (it is very likely that there is a better way to do it)
@@ -77,7 +83,7 @@ class HyperStudent(keras_tuner.HyperModel):
         self.idx_confs_perNlayer.append(len(self.model_configurations))
         self.num_conf_perNlayer = [j-i for i, j in zip(self.idx_confs_perNlayer[:-1], self.idx_confs_perNlayer[1:])]
     
-
+        self.stopper = 0
         print('Total feasible configurations: ', len(self.model_configurations))
 
     def compute_model_params(self, config):
@@ -91,44 +97,40 @@ class HyperStudent(keras_tuner.HyperModel):
 
     def build(self, hp):
 
-        quantized = True
+        #quantized = True
         inputs = keras.Input(shape=self.input_shape[1:])
         x = layers.Flatten()(inputs)
 
         config_index = hp.Int("config_indx", min_value=0, max_value=len(self.model_configurations)-1, step=1)
         bits_index = 0
         selected_bits_conf = []
-        #next(x for x in the_iterable if x > 3)
-        if quantized:
-            
-            #print("bits")
-            #print(selected_bits_conf)
-            #for i in self.idx_confs_perNlayer[1:]:
-            #    print("cond index per nlayer for HP/////////////")
-            #    print(i)
-            #    with hp.conditional_scope("config_indx", [*range(i)]):
-            #        selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
-            #        bits_index = hp.Int("bits_indx", min_value=0, max_value=len(selected_bits_conf)-1, step=1)
-            #        print(len(selected_bits_conf)-1)
-            #        if config_index in [*range(i)]:
-            #            break
-
+        if self.quantized:
+            temp_idx = []
+            lastrange = 0
             for i in self.idx_confs_perNlayer[1:]:
-                # Selecting the set of configurations associated to the # of layers of config_index and setting up the index of the quantization configurations accordingly
-                if config_index in [*range(i)]:
-                    selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
-                    bits_index = hp.Int("bits_indx", min_value=0, max_value=len(selected_bits_conf)-1, step=1)
-                    print(len(selected_bits_conf)-1)
-                    
-                    break
+            # Selecting the set of configurations associated to the # of layers of config_index and setting up the index of the quantization configurations accordingly
+                selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[i-1])][0]
+                bits_index = hp.Int("bits_indx_" + str(len(self.model_configurations[i-1])), min_value=0, max_value=len(selected_bits_conf)-1, step=1)
+                temp_idx.append(bits_index)
+                temp_idx.append(len(self.model_configurations[i-1]))
+                lastrange = i        
+            lastrange = 0
+
+            # Sekectubg appropriate bit index considering the number of layers in the model configuration selected
+            bits_index = temp_idx[::2][temp_idx[1::2].index(next(idx for idx in temp_idx[1::2] if idx == len(self.model_configurations[config_index])))]
+            selected_bits_conf = [num for num in self.bits_configurations if len(self.bits_configurations[self.bits_configurations.index(num)][0]) == len(self.model_configurations[config_index])][0]
+            print("Bitwidth index selected: ", bits_index)
+           
 
         i = 0
         # Number of hidden layers of the MLP is a hyperparameter.
+        
         for units in self.model_configurations[config_index]:
             # Number of units of each layer are
             # different hyperparameters with different names.
             
-            if quantized:
+            if self.quantized:
+
                 print("Bitwidth of QDense layer # ",i)
                 print(selected_bits_conf[bits_index][i])
                 x = QDense(units=units, activation=quantized_relu(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1]), \
@@ -143,7 +145,7 @@ class HyperStudent(keras_tuner.HyperModel):
         # represents the learned loss value
         
         
-        if quantized:
+        if self.quantized:
             final_quant_idx = hp.Int("final_quant_idx", min_value=0, max_value = len(self.quant_bits)-1, step=1)
             final_quant = self.quant_bits[final_quant_idx]
             print("Bitwidth of final QDense layer")
