@@ -48,4 +48,31 @@ rule selective_sampling_jets_met:
                                       --outfile_discarded {output.outfile_discarded}\
                                       --txt_outfile {params.txt_outfile}\
                                       --plot_dir {params.plots}'
+
+
+
+rule optimize_l1_teacher:
+    input:
+        data_file = 'output/l1_regression_train_selective.h5' #rules.selective_sampling_jets_met.output.outfile,
+    params:
+        log_features = '"pt"',
+        loss_function = '"huber_1.0"',
+        metric_thresholds = '100,150',
+        test_split = 0.2,
+        batch_size = 1024,
+        max_epochs = 2,   
+        hyperband_factor=3,
+        output_dir = 'output/',
+    output:
+    shell:
+        'echo --data_file {input.data_file} \
+                                      --log_features {params.log_features}\
+                                      --loss_function {params.loss_function}\
+                                      --metric_thresholds {params.metric_thresholds}\
+                                      --test_split {params.test_split}\
+                                      --batch_size {params.batch_size}\
+                                      --max_epochs {params.max_epochs}\
+                                      --hyperband_factor {params.hyperband_factor}\
+                                      --output_dir {params.output_dir}'
+
                                       

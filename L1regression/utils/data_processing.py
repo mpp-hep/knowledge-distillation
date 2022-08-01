@@ -90,6 +90,7 @@ class GraphCreator:
 
     def prepare_true_labels(self):
         self.labels =  self.true_met/self.reco_met
+        self.labels = np.concatenate([self.labels.reshape(-1,1),self.features[:,0,idx_feature['met']].reshape(-1,1)],axis=1)
 
     def apply_mask_on_graph(self,mask):
         return self.features[mask], self.adjacency[mask], self.labels[mask]

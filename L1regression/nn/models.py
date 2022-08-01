@@ -12,12 +12,13 @@ from keras_dgl.layers import GraphAttentionCNN,MultiGraphCNN,MultiGraphAttention
 
 
 class GraphAttentionHyperModel(keras_tuner.HyperModel):
-    def __init__(self, features_input_shape, adjancency_input_shape, filters_input_shape, num_filters, loss_function):
+    def __init__(self, features_input_shape, adjancency_input_shape, filters_input_shape, num_filters, loss_function,metrics=[]):
         self.features_input_shape = features_input_shape
         self.adjancency_input_shape = adjancency_input_shape
         self.filters_input_shape = filters_input_shape
         self.num_filters = num_filters
         self.loss_function = loss_function
+        self.metrics = metrics
 
     def build(self, hp):
         # Initialize sequential API and start building model.
@@ -55,18 +56,10 @@ class GraphAttentionHyperModel(keras_tuner.HyperModel):
     
         # Define optimizer, loss, and metrics
         model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
-                  loss=self.loss_function)
+                  loss=self.loss_function,
+                  metrics=self.metrics)
     
         return model
-
-    #TODO : Check if fit function is needed
-    def fit(self, hp, model, *args, **kwargs):
-        return model.fit(
-            *args,
-            # Tune whether to shuffle the data in each epoch.
-            shuffle=hp.Boolean("shuffle"), #TODO : check this
-            **kwargs,
-        )
 
 
 
