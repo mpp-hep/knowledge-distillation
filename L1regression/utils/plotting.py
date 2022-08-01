@@ -71,3 +71,5 @@ def calculateEff(name, refArr, corrArr, corrThr, xmax,nbins=20):
 def makeRatePlot(refArr, corrThr):
     eff = [np.sum(refArr>thresh)/len(refArr) for thresh in corrThr]
     return eff
+
+    

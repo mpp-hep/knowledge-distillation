@@ -27,13 +27,13 @@ def make_adjacencies(particles):
 
 
 class MetResolutionEvaluator:
-    def __init__(reco_met,true_met,process_ids,dnn_correction,mask=None):
+    def __init__(self,reco_met,true_met,process_ids,dnn_correction,mask=None):
         if mask is None:
             mask = np.ones(reco_met.shape[0],dtype=bool)
-        self.reco_met = reco_met[mask]
-        self.true_met = true_met[mask]
+        self.reco_met = reco_met[mask].reshape(-1,)
+        self.true_met = true_met[mask].reshape(-1,)
         self.process_ids = process_ids[mask]
-        self.dnn_correction = dnn_correction[mask]
+        self.dnn_correction = dnn_correction[mask].reshape(-1,)
         self.compute_properties()
 
     def compute_properties(self):

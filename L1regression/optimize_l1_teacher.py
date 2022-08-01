@@ -85,10 +85,11 @@ def main_optimize_l1_teacher(data_file='',log_features=[''], loss_function='',me
              workers=3)
 
     tuner.results_summary()
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_file', type=str, help='Where is the data')
+    parser.add_argument('--data_file', type=str, help='Path to the input file ')
     parser.add_argument('--output_dir', type=str, help='Output directory')
     parser.add_argument('--log_features', type=str, help='Which features scale to be log')
     parser.add_argument('--metric_thresholds', type=str, help='List of metric thresholds to be monitored in MseThesholdMetric')
