@@ -34,13 +34,12 @@ class HyperTeacher(keras_tuner.HyperModel):
 
         latent_dim = 8
         num_layers = hp.Choice('num_layers', values=[2, 3])
+        first_conv2d = hp.Choice('conv2d', values=[256, 196, 128, 64])
 
         if num_layers==3:
-            first_conv2d = hp.Choice('conv2d', values=[256, 128])
             second_conv2d = int(first_conv2d/2)
             third_conv2d = int(second_conv2d/2)
         else:
-            first_conv2d = hp.Choice('conv2d_1', values=[256, 128])
             second_conv2d = int(first_conv2d/2)
 
         # encoder
@@ -90,16 +89,18 @@ def optimisation(args):
 
     # load data
     with open(args.input_file, 'rb') as f:
-        _, _, x_test, y_test, _, _ = pickle.load(f)
+        x_train, y_train, _, _, x_val, y_val, _, _, _, _, _ = pickle.load(f)
 
-    hypermodel = HyperTeacher(x_test.shape)
+    print(f'x_val shape {x_val.shape}, y_val shape is {y_val.shape}')
+
+    hypermodel = HyperTeacher(x_val.shape)
     tuner = keras_tuner.RandomSearch(
           hypermodel,
           objective='val_loss',
           max_model_size=500000,
           max_trials=20,
           overwrite=True,
-          directory='output/hyper_tuning',
+          directory='hyper_tuning',
           )
     tuner.search_space_summary()
     # Use the TensorBoard callback.
@@ -110,9 +111,9 @@ def optimisation(args):
         ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_lr=1e-9)
         ]
     tuner.search(
-        x=x_test,
-        y=y_test,
-        epochs=50,
+        x=x_val,
+        y=y_val,
+        epochs=20,
         batch_size=1024,
         validation_split=0.2,
         callbacks=callbacks
@@ -122,9 +123,21 @@ def optimisation(args):
     logging.info('Get the optimal hyperparameters')
 
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
-
     logging.info('Getting and printing best hyperparameters!')
     print(best_hps)
+
+    best_model = tuner.get_best_models()[0]
+    best_model.build(x_val.shape[1:])
+    best_model.summary()
+    best_model.fit(
+        x=x_train,
+        y=y_train,
+        epochs=100,
+        batch_size=1024,
+        validation_split=0.2,
+        callbacks=callbacks
+        )
+    best_model.save(args.teacher_loc)
 
 
 if __name__ == '__main__':
@@ -133,6 +146,8 @@ if __name__ == '__main__':
 
     # Required arguments
     parser.add_argument('input_file', help='input file',
+        type=str)
+    parser.add_argument('teacher_loc', help='where to save the best teacher',
         type=str)
 
     args = parser.parse_args()
