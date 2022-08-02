@@ -40,9 +40,10 @@ class MetResolutionEvaluator:
         self.corr_met = self.reco_met*self.dnn_correction
         self.met_rel_diff = np.where(self.true_met>0,(self.true_met-self.reco_met)/self.true_met,0)
         self.met_rel_diff_corr = np.where(self.true_met>0,(self.true_met-self.corr_met)/self.true_met,0)
-        self.met_ratio = np.where(self.true_met>0,self.true_met/self.reco_met,0)
-        self.met_ratio_corr = np.where(self.true_met>0,self.true_met/self.corr_met,0)
-
+        self.met_tor = np.where(self.reco_met>0,self.true_met/self.reco_met,0)
+        self.met_tor_corr = np.where(self.corr_met>0,self.true_met/self.corr_met,0)
+        self.met_rot = np.where(self.true_met>0,self.reco_met/self.true_met,0)
+        self.met_rot_corr = np.where(self.true_met>0,self.corr_met/self.true_met,0)
 
 
     

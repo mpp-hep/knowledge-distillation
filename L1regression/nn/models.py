@@ -55,6 +55,7 @@ class GraphAttentionHyperModel(keras_tuner.HyperModel):
         hp_learning_rate = hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4])
     
         # Define optimizer, loss, and metrics
+        #TO DO :loss and metrics should not be part of the model, fix
         model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
                   loss=self.loss_function,
                   metrics=self.metrics)
