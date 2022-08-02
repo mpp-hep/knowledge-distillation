@@ -63,6 +63,7 @@ rule reformat_ae_l1_data:
     output:
         train_loss = 'output/l1_ae_train_loss.h5',
         test_loss = 'output/l1_ae_test_loss.h5',
+        val_loss = 'output/l1_ae_val_loss.h5',
         signal_loss = 'output/l1_ae_signal_loss.h5'
     params:
         log_loss = True
@@ -71,6 +72,7 @@ rule reformat_ae_l1_data:
                                        --teacher-input-h5 {input.teacher_h5} \
                                        --output-train-loss {output.train_loss} \
                                        --output-test-loss {output.test_loss} \
+                                       --output-val-loss {output.val_loss} \
                                        --output-signal-loss {output.signal_loss}\
                                        --log-loss {params.log_loss}'
 
@@ -105,6 +107,7 @@ rule kd_ae_l1_train:
     input:
         train = rules.reformat_ae_l1_data.output.train_loss,
         test = rules.reformat_ae_l1_data.output.test_loss,
+        val = rules.reformat_ae_l1_data.output.val_loss,
         signal = rules.reformat_ae_l1_data.output.signal_loss
     params:
         data_name = 'data',
@@ -125,6 +128,7 @@ rule kd_ae_l1_train:
         'mkdir -p {params.plots};'
         'python knowledge_distillation.py --input-train-file {input.train} \
                                           --input-test-file {input.test} \
+                                          --input-val-file {input.val} \
                                           --input-signal-file {input.signal} \
                                           --data-name {params.data_name} \
                                           --n-features {params.n_features} \

@@ -31,6 +31,10 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         x_train = np.array(f[data_name][:,:,:n_features])
         y_train = np.array(f[teacher_loss_name])
 
+    # load teacher's loss for validation
+    with h5py.File(input_val_file, 'r') as f:
+        x_val = np.array(f[data_name][:,:,:n_features])
+        y_val = np.array(f[teacher_loss_name])
 
     # student model
     student_model = student(
@@ -56,7 +60,7 @@ def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
         epochs=n_epochs,
         batch_size=batch_size,
         verbose=2,
-        validation_split=0.2,
+        validation_data=(x_val,y_val),
         callbacks=callbacks)
 
     plt.hist(student_model.predict(x_train,batch_size=batch_size),

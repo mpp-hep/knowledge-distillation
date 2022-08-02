@@ -175,7 +175,7 @@ def main(args):
 
     # load dataset and pt scaler
     with open(args.dataset, 'rb') as f:
-        x_train, y_train, x_test, y_test, _, _, _, pt_scaler, _, _, _ = pickle.load(f)
+        x_train, y_train, x_test, y_test, _, _, _, pt_scaler, _, _, _, _ = pickle.load(f)
 
     background_loss, x_target, x_predicted  = evaluate(model, x_test, pt_scaler)
 

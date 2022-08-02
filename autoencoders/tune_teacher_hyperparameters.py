@@ -89,7 +89,12 @@ def optimisation(args):
 
     # load data
     with open(args.input_file, 'rb') as f:
-        x_train, y_train, _, _, x_val, y_val, _, _, _, _, _ = pickle.load(f)
+        x_train, y_train, x_test, y_test, x_val, y_val, \
+        bsm_data, pt_scaler,\
+        background_ID_train,\
+        background_ID_test,\
+        background_ID_val,\
+        background_ID_names = pickle.load(f)
 
     print(f'x_val shape {x_val.shape}, y_val shape is {y_val.shape}')
 
@@ -98,7 +103,7 @@ def optimisation(args):
           hypermodel,
           objective='val_loss',
           max_model_size=500000,
-          max_trials=20,
+          max_trials=1,
           overwrite=True,
           directory='hyper_tuning',
           )
@@ -113,9 +118,9 @@ def optimisation(args):
     tuner.search(
         x=x_val,
         y=y_val,
-        epochs=20,
+        epochs=1,
         batch_size=1024,
-        validation_split=0.2,
+        validation_split=0.5,
         callbacks=callbacks
         )
 
@@ -132,9 +137,9 @@ def optimisation(args):
     best_model.fit(
         x=x_train,
         y=y_train,
-        epochs=100,
+        epochs=1,
         batch_size=1024,
-        validation_split=0.2,
+        validation_data=(x_val,y_val),
         callbacks=callbacks
         )
     best_model.save(args.teacher_loc)
