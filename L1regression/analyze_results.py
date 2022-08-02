@@ -1,3 +1,4 @@
+import setGPU
 import h5py
 import numpy as np
 import matplotlib
@@ -121,7 +122,7 @@ def main_analyze_results(data_file='',training_dir='',inclusive_thresholds=[],pl
         eff,thresholds = plotting.makeRate(evaluator.reco_met,max_met)
         eff_corr,_ = plotting.makeRate(evaluator.corr_met,max_met)
         plotting.plot_scatter([thresholds,thresholds],[eff,eff_corr],
-                                ['Baseline','Corrected'],xtitle=r'$MET^{true}$',ytitle='Normalized Yield',title=proc,
+                                ['Baseline','Corrected'],xtitle=r'$MET^{true}$',ytitle='Normalized Yield',title=proc,semilogy=True,
                                 output_dir=plot_subdir,plot_name=f'plot_rates_{proc_save_name}.pdf')
 
         #Efficiency plots for the same rates

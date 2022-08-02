@@ -65,11 +65,11 @@ def get_met_ht(lorentz_all_particles,idx_jets=8):
 
 def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_dir='',jet_corr_dir='', jet_pt_filename='',jet_eta_filename='',train_test_split=0.8):
     with open(data_file, 'rb') as f:
-        x_train, _, x_test, _, _, _, \
-        ids_train, ids_test, ids_names = pickle.load(f)
-        data = np.concatenate((x_train,x_test),axis=0)
-        ids = np.concatenate((ids_train,ids_test),axis=0)
-        del x_train,x_test, ids_train, ids_test
+        x_train, _,x_test, _, x_val, _,_,_,ids_train, ids_test, ids_val, ids_names  = pickle.load(f)
+
+        data = np.concatenate((x_train,x_test,x_val),axis=0)
+        ids = np.concatenate((ids_train,ids_test,ids_val),axis=0)
+        del x_train,x_test,x_val, ids_train, ids_test,ids_val
 
     #removing Zll 
     data = data[ids!=2] #2 is index of Zll
@@ -97,7 +97,7 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
                 linestyle = 'None',
                 marker=markers[i],
                 color=colors[i])
-    plt.legend()
+    plt.legend(frameon=False)
     plt.ylabel('Correction factor')
     plt.xlabel('Jet |$\eta$|')
     plt.xlim(0, 4.75)
@@ -131,7 +131,7 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
         plt.plot(jer_correction_data[jet_bin]['pt'], energy_res_function(jer_correction_data[jet_bin]['pt'], *popts[i]),linewidth=3,
                       linestyle='--',color=colors[i],label='fit: a=%5.3f, b=%5.3f,c=%5.3f' % tuple(popts[i]))
 
-    plt.legend()
+    plt.legend(frameon=False)
     plt.ylabel('JER')
     plt.xlabel('Jet $p_T$')
     plt.semilogx()
