@@ -103,7 +103,7 @@ def optimisation(args):
           hypermodel,
           objective='val_loss',
           max_model_size=500000,
-          max_trials=1,
+          max_trials=30,
           overwrite=True,
           directory='hyper_tuning',
           )
@@ -118,7 +118,7 @@ def optimisation(args):
     tuner.search(
         x=x_val,
         y=y_val,
-        epochs=1,
+        epochs=20,
         batch_size=1024,
         validation_split=0.5,
         callbacks=callbacks
@@ -137,7 +137,7 @@ def optimisation(args):
     best_model.fit(
         x=x_train,
         y=y_train,
-        epochs=1,
+        epochs=100,
         batch_size=1024,
         validation_data=(x_val,y_val),
         callbacks=callbacks
