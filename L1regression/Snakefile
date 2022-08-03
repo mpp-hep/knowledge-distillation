@@ -25,47 +25,48 @@ rule prepare_L1_regression_data:
                                             --jet_corr_dir {input.jet_corr_dir}\
                                             --train_test_split {params.train_test_split}'
 
-rule selective_sampling_jets_met:
+rule selective_sampling_jets:
     input:
         data_train = rules.prepare_L1_regression_data.output.outfile_train,
     params:
         fractions_to_keep = '"0."',
         mode = '"=="',
-        met_sampling = True,
-        met_threshold = 180,
+        sampling_threshold = 400, #met 180, ht 400
         txt_outfile = 'output/jet_summary_stat.txt',
-        plots = 'plot/',
     output:
-        outfile = 'output/l1_regression_train_selective.h5',
-        outfile_discarded = 'output/l1_regression_train_discarded.h5'
+        outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
+        outfile_discarded = 'output/l1_regression_train_discarded_{sampling_var}.h5',
+        plots = directory('plots_selective_{sampling_var}/')
     shell:
-        'python selective_sampling_jets_met.py --data_file {input.data_train} \
+        'mkdir -p {output.plots};'
+        'python selective_sampling_jets.py --data_file {input.data_train} \
                                       --fractions_to_keep {params.fractions_to_keep}\
                                       --mode {params.mode}\
-                                      --met_sampling {params.met_sampling}\
-                                      --met_threshold {params.met_threshold}\
+                                      --sampling_var {wildcards.sampling_var}\
+                                      --sampling_threshold {params.sampling_threshold}\
                                       --outfile {output.outfile}\
                                       --outfile_discarded {output.outfile_discarded}\
                                       --txt_outfile {params.txt_outfile}\
-                                      --plot_dir {params.plots}'
+                                      --plot_dir {output.plots}'
 
 
 
 rule optimize_l1_teacher:
     input:
-        data_file = 'output/l1_regression_train_selective.h5' #rules.selective_sampling_jets_met.output.outfile,
+        data_file = 'output/l1_regression_train_selective_{variable}.h5' #rules.selective_sampling_jets_met.output.outfile,
     params:
-        log_features = '"pt"',
+        log_features = "''",#'"pt"',
         loss_function = '"huber_1.0"',
-        metric_thresholds = '100,150',
+        metric_thresholds = '200,300',
         test_split = 0.2,
         batch_size = 1024,
-        max_epochs = 2,   
+        max_epochs = 50,   
         hyperband_factor=3,
-        output_dir = 'output/',
     output:
+        output_dir = directory('output_nolog_{variable}/'),
     shell:
-        'echo --data_file {input.data_file} \
+        'python optimize_l1_teacher.py --data_file {input.data_file} \
+                                      --variable {wildcards.variable}\
                                       --log_features {params.log_features}\
                                       --loss_function {params.loss_function}\
                                       --metric_thresholds {params.metric_thresholds}\
@@ -73,6 +74,23 @@ rule optimize_l1_teacher:
                                       --batch_size {params.batch_size}\
                                       --max_epochs {params.max_epochs}\
                                       --hyperband_factor {params.hyperband_factor}\
-                                      --output_dir {params.output_dir}'
+                                      --output_dir {output.output_dir}'
 
                                       
+
+rule analyze_results:
+    input:
+        data_file = 'output/l1_regression_test.h5' 
+    params:
+        log_features = "''",#'"pt"',
+        inclusive_thresholds = "'200,320,450'". #100,120,150 for met; 200,320,450 for HT
+        training_dir=directory('output_nolog_{variable}/'),
+    output:
+        plots = directory('plots_output_nolog_{variable}/'),
+    shell:
+        'mkdir -p {output.plots};'
+        'python analyze_results.py --data_file {input.data_file} \
+                                      --variable {wildcards.variable}\
+                                      --log_features {params.log_features}\
+                                      --inclusive_thresholds {params.inclusive_thresholds}\
+                                      --plot_dir {output.plots}'

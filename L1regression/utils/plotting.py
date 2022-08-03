@@ -7,7 +7,7 @@ import shutil
 from scipy.optimize import curve_fit
 import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use("Agg") 
+#matplotlib.use("Agg") 
 matplotlib.rcParams.update({'font.size': 18})
 colors = ['#016c59', '#7a5195', '#ef5675', '#ffa600', '#67a9cf']
 colors_reco_corr = ['#377eb8','#e41a1c','#984ea3','#dede00','#f781bf']
@@ -117,10 +117,13 @@ def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,output_dir=
 
 
 
-def plot_distibutions(datas, labels,xtitle,ytitle,nbins=40,output_dir='',plot_name='', title='',semilogy=True):
+def plot_distibutions(datas, labels,xtitle,ytitle,bins=40,output_dir='',plot_name='', title='',semilogy=True):
     fig = plt.figure(figsize=(10,8))
     ax = fig.add_subplot(111)
-    bins=np.linspace(np.min(datas[0]),np.quantile(datas[0],0.999)*1.1,nbins)
+    if isinstance(bins,int):
+        min_x = np.min([np.min(data) for data in datas])
+        max_x = np.max([np.quantile(data,0.999)*1.1 for data in datas])
+        bins=np.linspace(min_x,max_x,bins)
     for i in range(len(datas)):
         _,_,_ = ax.hist(datas[i],bins=bins,histtype='step',linewidth=2,linestyle=linestyles[i],color=colors_reco_corr[i],
                     label=labels[i])
@@ -139,7 +142,7 @@ def plot_distibutions(datas, labels,xtitle,ytitle,nbins=40,output_dir='',plot_na
         plt.savefig(os.path.join(output_dir, plot_name), bbox_inches="tight")
         plt.savefig(os.path.join(output_dir, plot_name.replace('.pdf','.png')), bbox_inches="tight")
         plt.clf()
-        plt.close()
+       # plt.close()
 
 
 
@@ -190,7 +193,7 @@ def plot_resolutions(datas_x,datas_y, labels,xtitle,ytitle,what_to_plot,do_fit=F
         plt.close()
 
 
-def plot_met_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title='',semilogy=False):
+def plot_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title='',semilogy=False):
     fig = plt.figure(figsize=(10,8))
     bins=np.linspace(0,4,200)
     bin_centers = (bins[1:]+bins[:-1])/2.

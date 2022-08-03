@@ -67,8 +67,10 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
     with open(data_file, 'rb') as f:
         x_train, _,x_test, _, x_val, _,_,_,ids_train, ids_test, ids_val, ids_names  = pickle.load(f)
 
-        data = np.concatenate((x_train,x_test,x_val),axis=0)
+        data = np.concatenate((x_train,x_test,x_val),axis=0).astype('float32')
         ids = np.concatenate((ids_train,ids_test,ids_val),axis=0)
+        #data = np.concatenate((x_train,x_test),axis=0).astype('float32')
+        #ids = np.concatenate((ids_train,ids_test),axis=0)
         del x_train,x_test,x_val, ids_train, ids_test,ids_val
 
     #removing Zll 
@@ -80,6 +82,8 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
     eta_idx = int(idx_feature['eta'])
     particles_in_jet = data[:,idx_jet_0:,:]
     other_particles = data[:,1:idx_jet_0,:]
+    original_met = data[:,0,0]
+    del data
 
 
     jet_pt_bins = [30,60,110,400]
@@ -165,18 +169,13 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
     mu_cut = np.where(other_particles_smeared[:,idx_particle_type['eg'][0],pt_idx]!=0,other_particles_smeared[:,idx_particle_type['eg'][0],pt_idx]>=23,True)
     select_reco_jets = np.where(
                         (np.all(pt_cut,axis=1)==True)[:,0] & 
-                        (np.all(em_cut,axis=1)==True) &
-                        (np.all(mu_cut,axis=1)==True)
+                        ((np.all(em_cut,axis=1)==True) |
+                        (np.all(mu_cut,axis=1)==True))
                     )[0] #all jets in the event have smeared pt > 20 GeV
 
-    particles_in_jet = particles_in_jet[select_reco_jets]
-    particles_in_jet_smeared = particles_in_jet_smeared[select_reco_jets]
-    other_particles = other_particles[select_reco_jets]
-    other_particles_smeared = other_particles_smeared[select_reco_jets]
-    ids = ids[select_reco_jets]
 
-    all_particles_smeared_selected = np.concatenate((other_particles_smeared,particles_in_jet_smeared),axis=1)
-    all_particles_selected = np.concatenate((other_particles,particles_in_jet),axis=1)
+    all_particles_smeared_selected = np.concatenate((other_particles_smeared[select_reco_jets],particles_in_jet_smeared[select_reco_jets]),axis=1)
+    all_particles_selected = np.concatenate((other_particles[select_reco_jets],particles_in_jet[select_reco_jets]),axis=1)
     lorentz_all_particles_smeared = create_lorentz_particles(all_particles_smeared_selected)
     lorentz_all_particles = create_lorentz_particles(all_particles_selected)
     met_smeared,metx_smeared,mety_smeared,ht_smeared = get_met_ht(lorentz_all_particles_smeared)
@@ -203,8 +202,9 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
             h5f.create_dataset('smeared_ht', data=ht_smeared[indecies].reshape(-1))
             h5f.create_dataset('true_data', data=true_data[indecies])    
             h5f.create_dataset('true_met', data=met[indecies].reshape(-1))
-            h5f.create_dataset('true_ht', data=ht[indecies].reshape(-1))        
-            h5f.create_dataset('ids', data=ids[indecies].reshape(-1))    
+            h5f.create_dataset('true_ht', data=ht[indecies].reshape(-1))   
+            h5f.create_dataset('original_met', data=original_met[select_reco_jets][indecies].reshape(-1))             
+            h5f.create_dataset('ids', data=ids[select_reco_jets][indecies].reshape(-1))    
             h5f.create_dataset('ids_names', data=ids_names[[0,1,3]])     #without Z
 
 
