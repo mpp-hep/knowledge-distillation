@@ -163,21 +163,118 @@ class HyperStudent(keras_tuner.HyperModel):
         hyper_student.summary()
         return hyper_student
 
-def optimisation(input_file, distillation_loss):
+
+class FixedArchHyperStudent(keras_tuner.HyperModel):
+
+    def __init__(self, input_shape, distillation_loss, n_nodes=[4,8,16]):
+        self.input_shape = input_shape
+        self.distillation_loss = distillation_loss
+        self.quant_bits = [[4,1],[8,3],[16,6]]
+        self.quant_idx = [] 
+        self.n_nodes = n_nodes
+        # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
+        flat_quant_bits = [x for xs in self.quant_bits for x in xs]
+        for i,j in enumerate(self.quant_bits,start=1):
+            while i in flat_quant_bits or i in self.quant_idx:
+                i += 1
+            self.quant_idx.append(i)
+
+
+        model_configurations = []
+        self.bits_configurations = []
+        self.model_configurations = []
+        self.num_conf_perNlayer = []
+        self.idx_confs_perNlayer = [0]
+
+
+        # Creating all possible quantization configurations given the number of layers and bitwidths
+        grid_choices = np.tile(self.quant_idx, (len(self.n_nodes),1))
+        configs = np.array(np.meshgrid(*grid_choices)).T.reshape(-1, len(self.n_nodes),1)
+        for i,j in zip(self.quant_idx,self.quant_bits):
+            configs = np.where(configs == i, j, configs)
+        self.bits_configurations = configs.tolist()
+
+
+    def compute_model_params(self, config):
+        total_params = 0
+        total_params += np.prod(self.input_shape[1:])*config[0]
+        total_params += config[-1]
+        for i in range(len(config)-1):
+            total_params += config[i]*config[i+1]
+        return total_params 
+
+
+    def build(self, hp):
+
+
+        inputs = keras.Input(shape=self.input_shape[1:])
+        x = layers.Flatten()(inputs)
+
+        bits_index = hp.Int("bits_indx", min_value=0, max_value=len(self.bits_configurations)-1, step=1)
+        print("Bitwidth index selected: ", bits_index)
+           
+
+        i = 0
+        # Number of hidden layers of the MLP is a hyperparameter.
+        
+        for units in self.bits_configurations[bits_index]:
+            # Number of units of each layer are
+            # different hyperparameters with different names.
+            
+            print("Bitwidth of QDense layer # ",i)
+            print(units)
+            x = QDense(units=self.n_nodes[i], activation=quantized_relu(units[0],units[1]), \
+                    kernel_quantizer=quantized_bits(units[0],units[1],alpha=1), \
+                    bias_quantizer=quantized_bits(units[0],units[1],alpha=1), kernel_initializer='random_normal')(x)
+            i += 1
+            
+        
+        # The last layer contains 1 unit, which
+        # represents the learned loss value
+        
+        
+        final_quant_idx = hp.Int("final_quant_idx", min_value=0, max_value = len(self.quant_bits)-1, step=1)
+        final_quant = self.quant_bits[final_quant_idx]
+        print("Bitwidth of final QDense layer")
+        print(final_quant)
+        outputs = QDense(1,kernel_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1),bias_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1))(x)
+        outputs = QActivation(activation=quantized_relu(final_quant[0],final_quant[1]))(outputs)
+        
+
+        hyper_student = keras.Model(inputs=inputs, outputs=outputs)
+
+        hyper_student.compile(
+            optimizer=Adam(lr=3E-3, amsgrad=True),
+            loss=self.distillation_loss
+            )
+        hyper_student.summary()
+        return hyper_student
+
+def optimisation(input_file, distillation_loss, n_nodes):
 
     # load teacher's loss for training
     with h5py.File(input_file, 'r') as f:
         x_train = np.array(f['data'][:,:,:3])
         y_train = np.array(f['teacher_loss'])
 
-    hypermodel = HyperStudent(x_train.shape, distillation_loss)
-    tuner = keras_tuner.RandomSearch(
-          hypermodel,
-          objective='val_loss',
-          max_trials=len(hypermodel.model_configurations),
-          overwrite=True,
-          directory='output/hyper_tuning',
-          )
+    if n_nodes:
+        hypermodel = FixedArchHyperStudent(x_train.shape, distillation_loss, n_nodes)
+        tuner = keras_tuner.RandomSearch(
+              hypermodel,
+              objective='val_loss',
+              max_trials=len(hypermodel.bits_configurations),
+              overwrite=True,
+              directory='output/hyper_tuning_quant',
+              )
+    else:
+        hypermodel = HyperStudent(x_train.shape, distillation_loss)
+        tuner = keras_tuner.RandomSearch(
+              hypermodel,
+              objective='val_loss',
+              max_trials=len(hypermodel.model_configurations),
+              overwrite=True,
+              directory='output/hyper_tuning',
+              )
     tuner.search_space_summary()
     # Use the TensorBoard callback.
     # The logs will be write to "/tmp/tb_logs".
@@ -200,12 +297,16 @@ def optimisation(input_file, distillation_loss):
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
     logging.info('Getting and printing best hyperparameters!')
-    print('Optimal Configuration:', hypermodel.model_configurations[best_hps['config_indx']])
+    if n_nodes:
+        print('Optimal Configuration:', hypermodel.bits_configurations[best_hps['config_indx']])
+    else:
+        print('Optimal Configuration:', hypermodel.model_configurations[best_hps['config_indx']])
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-file', type=str, help='input file', required=True)
     parser.add_argument('--distillation-loss', type=str, default='mse', help='Loss to use for distillation')
+    parser.add_argument('--n-nodes', nargs='+', type=int, default=None, help='# nodes for each layer for a search of optimal quantization with fixed network architecture')
     args = parser.parse_args()
     optimisation(**vars(args))
