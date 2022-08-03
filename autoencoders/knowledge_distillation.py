@@ -20,7 +20,7 @@ from models import student
 from plot_results import BSM_SAMPLES
 
 
-def knowledge_distillation(input_train_file, input_test_file, input_signal_file,
+def knowledge_distillation(input_train_file, input_test_file, input_val_file, input_signal_file,
     data_name, n_features, teacher_loss_name, output_model_h5, output_model_json,
     output_history, batch_size, n_epochs, distillation_loss, dropout,
     learning_rate, node_size, quant_size, output_result, output_dir,
@@ -131,6 +131,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-train-file', type=str, help='Evaluated Teacher on train set')
     parser.add_argument('--input-test-file', type=str, help='Evaluated Teacher on test set')
+    parser.add_argument('--input-val-file', type=str, help='Evaluated Teacher on val set')
     parser.add_argument('--input-signal-file', type=str, help='Evaluated Teacher on signals set')
     parser.add_argument('--data-name', type=str, help='Name of the data in the input h5')
     parser.add_argument('--n-features', type=int, default=3, help='First N features to train on')
