@@ -8,11 +8,13 @@ from scipy.optimize import curve_fit
 import matplotlib
 import matplotlib.pyplot as plt
 #matplotlib.use("Agg") 
-matplotlib.rcParams.update({'font.size': 18})
+import mplhep as hep
+hep.style.use(hep.style.CMS) 
+
 colors = ['#016c59', '#7a5195', '#ef5675', '#ffa600', '#67a9cf']
-colors_reco_corr = ['#377eb8','#e41a1c','#984ea3','#dede00','#f781bf']
+colors_reco_corr = ['black','#017517','#7a5195','#dede00','#f781bf']
 markers = ['s','*','o','v','8']
-linestyles=['dashed','solid','dotted']
+linestyles=['solid','dashed','dotted','dashdot',(0, (1, 1))]
 
 
 def gaus(x,a,mu,sigma):
@@ -20,7 +22,8 @@ def gaus(x,a,mu,sigma):
 
 
 def compute_resolution(x, y, nbin,do_fit=True):
-    bins = np.percentile(x, np.linspace(0,100.,num=nbin+1) )
+    percent_bins = np.linspace(0,100.,num=nbin+1)
+    bins = np.percentile(x,percent_bins )
     h, xe, ye = np.histogram2d(x,y,bins)
     # bin width
     xbinw = xe[1]-xe[0]
@@ -96,16 +99,18 @@ def get_rate_from_threshold(values,max_x,threshold):
     rate = eff[np.searchsorted(x_values,threshold)]
     return rate
 
-def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,output_dir='',plot_name='', title=''):
-    fig = plt.figure(figsize=(10,8))
+def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,semilogx=False,output_dir='',plot_name='', title=''):
     for i in range(len(datas_x)):
         _ = plt.scatter(datas_x[i],datas_y[i],color=colors_reco_corr[i],marker=markers[i],s=100,label=labels[i])
     plt.title(title)
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
     plt.legend(frameon=False)
     if semilogy:
         plt.semilogy()
+    if semilogx:  
+        plt.semilogx()
     if output_dir=='' or plot_name=='':
         print('No output directory set, only showing the plot')
         plt.show()
@@ -117,19 +122,20 @@ def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,output_dir=
 
 
 
-def plot_distibutions(datas, labels,xtitle,ytitle,bins=40,output_dir='',plot_name='', title='',semilogy=True):
-    fig = plt.figure(figsize=(10,8))
+def plot_distibutions(datas, labels,xtitle,ytitle,bins=40,output_dir='',plot_name='', title='',semilogy=True, density=False):
+    fig = plt.figure()
     ax = fig.add_subplot(111)
     if isinstance(bins,int):
         min_x = np.min([np.min(data) for data in datas])
         max_x = np.max([np.quantile(data,0.999)*1.1 for data in datas])
         bins=np.linspace(min_x,max_x,bins)
     for i in range(len(datas)):
-        _,_,_ = ax.hist(datas[i],bins=bins,histtype='step',linewidth=2,linestyle=linestyles[i],color=colors_reco_corr[i],
+        _,_,_ = ax.hist(datas[i],bins=bins,density=density,histtype='step',linewidth=2,linestyle=linestyles[i],color=colors_reco_corr[i],
                     label=labels[i])
     plt.title(title)
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
     if semilogy:
         plt.semilogy()
     handles, labels = ax.get_legend_handles_labels()
@@ -147,7 +153,6 @@ def plot_distibutions(datas, labels,xtitle,ytitle,bins=40,output_dir='',plot_nam
 
 
 def plot_efficiency(datas_x,datas_y, thresholds,max_x,labels,xtitle,ytitle,nbins=40,output_dir='',plot_name='', title=''):
-    fig = plt.figure(figsize=(10,8))
     for i in range(len(datas_x)):
         eff_dict = calculateEff(datas_x[i],datas_y[i],thresholds[i],max_x,nbins=nbins)
         _ = plt.errorbar(eff_dict['bins_centers'],eff_dict['yvals'],xerr=eff_dict['bins_err'],yerr=eff_dict['yvals_down_up'], 
@@ -156,6 +161,7 @@ def plot_efficiency(datas_x,datas_y, thresholds,max_x,labels,xtitle,ytitle,nbins
     plt.title(title)
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
     plt.legend(frameon=False,loc='lower right')
     if output_dir=='' or plot_name=='':
         print('No output directory set, only showing the plot')
@@ -170,7 +176,6 @@ def plot_efficiency(datas_x,datas_y, thresholds,max_x,labels,xtitle,ytitle,nbins
 
 def plot_resolutions(datas_x,datas_y, labels,xtitle,ytitle,what_to_plot,do_fit=False,output_dir='',plot_name='', title=''):
     what_to_plot = what_to_plot.split('/')        
-    fig = plt.figure(figsize=(10,8))
     for i in range(len(datas_x)):
         prop_dict = compute_resolution(datas_x[i],datas_y[i],nbin=20,do_fit=do_fit)
         if len(what_to_plot)==2:
@@ -182,6 +187,7 @@ def plot_resolutions(datas_x,datas_y, labels,xtitle,ytitle,what_to_plot,do_fit=F
     plt.title(title)
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
     plt.legend(frameon=False,loc='upper right')
     if output_dir=='' or plot_name=='':
         print('No output directory set, only showing the plot')
@@ -194,7 +200,6 @@ def plot_resolutions(datas_x,datas_y, labels,xtitle,ytitle,what_to_plot,do_fit=F
 
 
 def plot_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title='',semilogy=False):
-    fig = plt.figure(figsize=(10,8))
     bins=np.linspace(0,4,200)
     bin_centers = (bins[1:]+bins[:-1])/2.
     for i,data in enumerate(datas):
@@ -212,6 +217,7 @@ def plot_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title=''
     plt.title(title)
     plt.xlabel(xtitle)
     plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
     if semilogy:
         plt.semilogy()
     plt.legend(frameon=False,loc='upper right')

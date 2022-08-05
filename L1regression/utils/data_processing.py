@@ -51,12 +51,13 @@ class ResolutionEvaluator:
     
 class METGraphCreator:
     def __init__(self, reco_data,reco_met,reco_ht, true_met,true_ht,process_ids,log_features=[]):
-        self.reco_data = reco_data
-        self.reco_met = reco_met
-        self.reco_ht = reco_ht
-        self.true_met = true_met
-        self.true_ht = true_ht
-        self.process_ids = process_ids
+        mask = reco_data[:,idx_jet_0,pt_idx]!=0 #mask events with 0 jets as we are not interested in this
+        self.reco_data = reco_data[mask]
+        self.reco_met = reco_met[mask]
+        self.reco_ht = reco_ht[mask]
+        self.true_met = true_met[mask]
+        self.true_ht = true_ht[mask]
+        self.process_ids = process_ids[mask]
         self.log_features_idx = [idx_feature_for_met[f] for f in log_features]
 
         self.prepare_graph_features()
@@ -102,7 +103,7 @@ class METGraphCreator:
 
 class HTGraphCreator:
     def __init__(self, reco_data,reco_ht,true_ht,process_ids,log_features=[]):
-        mask = reco_data[:,idx_jet_0,0]!=0 #mask events with 0 jets as we are not interested in this
+        mask = reco_data[:,idx_jet_0,pt_idx]!=0 #mask events with 0 jets as we are not interested in this
         self.reco_data = reco_data[:,idx_jet_0:,:][mask] #dataset consists of jets only
         self.reco_ht = reco_ht[mask]
         self.true_ht = true_ht[mask]

@@ -12,49 +12,54 @@ from keras_dgl.layers import GraphAttentionCNN,MultiGraphCNN,MultiGraphAttention
 
 
 class GraphAttentionHyperModel(keras_tuner.HyperModel):
-    def __init__(self, features_input_shape, adjancency_input_shape, filters_input_shape, num_filters, loss_function,metrics=[]):
+    def __init__(self, features_input_shape, adjancency_input_shape, filters_input_shape,emb_input_size, embedding_idx, num_filters, loss_function,metrics=[]):
         self.features_input_shape = features_input_shape
         self.adjancency_input_shape = adjancency_input_shape
         self.filters_input_shape = filters_input_shape
+        self.emb_input_size = emb_input_size
+        self.embedding_idx = embedding_idx
         self.num_filters = num_filters
         self.loss_function = loss_function
         self.metrics = metrics
 
     def build(self, hp):
-        # Initialize sequential API and start building model.
-        features_input = keras.Input(shape=self.features_input_shape)
-        adjancency_input = keras.Input(shape=self.adjancency_input_shape)
-        filters_input = keras.Input(shape=self.filters_input_shape)
+        features_input = keras.Input(shape=self.features_input_shape, name='features_input')
+        adjancency_input = keras.Input(shape=self.adjancency_input_shape, name='adjancency_input')
+        filters_input = keras.Input(shape=self.filters_input_shape, name='filters_input')
         activation=hp.Choice("activation", ["relu", "elu"])
 
-        x=features_input
-
-        # Tune the number of hidden layers and units in each.
-        # Number of hidden layers: 3 - 6
-        # Number of Units: 32 - 256 with stepsize of 32
+        if self.embedding_idx>=0 :
+            feat_idx = np.arange(self.features_input_shape[1],dtype=int)
+            feat_idx = np.delete(feat_idx, [self.embedding_idx], axis=0)
+            x_emb =  features_input[:,:,self.embedding_idx]
+            x_feats = tf.gather(features_input,tf.constant(feat_idx),axis=-1)
+            x_emb = keras.layers.Embedding(input_dim=self.emb_input_size,
+                                output_dim = hp.Int("embedding" , min_value=2, max_value=4, step=1),
+                                embeddings_regularizer=l2(5e-6)
+                                )(x_emb)  
+            x = keras.layers.Concatenate(axis=-1)([x_feats, x_emb])
+        else :
+            x=features_input
 
         x = keras.layers.BatchNormalization()(x)
-
-        for i in range(1, hp.Int("num_layers", 4, 7)):
-            x = MultiGraphAttentionCNN(output_dim=hp.Int("units_" + str(i), min_value=32, max_value=256, step=32),
+        
+        for i in range(1, hp.Int("num_layers", 3, 5)): # 4 7
+            x = MultiGraphAttentionCNN(output_dim=hp.Int("units_" + str(i), min_value=64, max_value=128, step=32), #32 , 256, 32
                  num_filters=self.num_filters, 
                  num_attention_heads=hp.Int("heads_" + str(i), min_value=3, max_value=5, step=1), 
                  attention_combine='concat', 
-                 attention_dropout=hp.Float("attention_dropout_" + str(i), 0, 0.3, step=0.1), 
+                 attention_dropout=hp.Float("attention_dropout_" + str(i), 0, 0.05, step=0.02), 
                  activation=activation, 
-                 kernel_regularizer=l2(5e-4))([x, adjancency_input, filters_input])
+                 kernel_regularizer=l2(5e-6))([x, adjancency_input, filters_input])
 
-            # Tune dropout layer with values from 0 - 0.3 with stepsize of 0.1.
-            x = keras.layers.Dropout(hp.Float("dropout_" + str(i), 0, 0.3, step=0.1))(x)
+            x = keras.layers.Dropout(hp.Float("dropout_" + str(i), 0, 0.05, step=0.02))(x)
 
-        x = keras.layers.Lambda(lambda x: K.mean(x, axis=1))(x)  # adding a node invariant layer to make sure output does not depends upon the node order in a graph.
+        x = keras.layers.Lambda(lambda x: K.sum(x, axis=1))(x)  # adding a node invariant layer (sum/mean/max/min) to make sure output does not depends upon the node order in a graph.
         output = keras.layers.Dense(1, activation=activation)(x)
-        model = Model(inputs=[features_input, adjancency_input, filters_input], outputs=output)
+        model = Model(inputs=[features_input, adjancency_input, filters_input], outputs=output, name='graph_att_model')
     
-        # Tune learning rate for Adam optimizer with values from 0.01, 0.001, or 0.0001
         hp_learning_rate = hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4])
     
-        # Define optimizer, loss, and metrics
         model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
                   loss=self.loss_function,
                   metrics=self.metrics)

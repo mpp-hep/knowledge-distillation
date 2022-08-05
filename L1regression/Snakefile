@@ -31,7 +31,7 @@ rule selective_sampling_jets:
     params:
         fractions_to_keep = '"0."',
         mode = '"=="',
-        sampling_threshold = 400, #met 180, ht 400
+        sampling_threshold = 80, #met 180, ht 400, true_ht_over_reco_ht = 2
         txt_outfile = 'output/jet_summary_stat.txt',
     output:
         outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
@@ -53,17 +53,17 @@ rule selective_sampling_jets:
 
 rule optimize_l1_teacher:
     input:
-        data_file = 'output/l1_regression_train_selective_{variable}.h5' #rules.selective_sampling_jets_met.output.outfile,
+        data_file = 'output/l1_regression_train_selective_{variable}.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
     params:
         log_features = "''",#'"pt"',
         loss_function = '"huber_1.0"',
-        metric_thresholds = '200,300',
+        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met
         test_split = 0.2,
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
     output:
-        output_dir = directory('output_nolog_{variable}/'),
+        output_dir = directory('output_optimization_{variable}/'),
     shell:
         'python optimize_l1_teacher.py --data_file {input.data_file} \
                                       --variable {wildcards.variable}\
@@ -80,17 +80,21 @@ rule optimize_l1_teacher:
 
 rule analyze_results:
     input:
-        data_file = 'output/l1_regression_test.h5' 
+        data_file = 'output/l1_regression_test.h5' #'output/l1_regression_train_selective_true_ht_over_reco_ht.h5' #'output/l1_regression_train_selective_{variable}.h5' # 'output/l1_regression_test.h5' 
     params:
-        log_features = "''",#'"pt"',
-        inclusive_thresholds = "'200,320,450'". #100,120,150 for met; 200,320,450 for HT
-        training_dir=directory('output_nolog_{variable}/'),
+        log_features = rules.optimize_l1_teacher.params.log_features,
+        loss_function = rules.optimize_l1_teacher.params.loss_function,
+        inclusive_thresholds = "'200,320,450'", #100,120,150 for met; 200,320,450 for HT
+        training_dir=rules.optimize_l1_teacher.output.output_dir
     output:
-        plots = directory('plots_output_nolog_{variable}/'),
+        plots = directory('plots_output_invert2_{variable}/'),
     shell:
         'mkdir -p {output.plots};'
         'python analyze_results.py --data_file {input.data_file} \
+                                      --loss_function {params.loss_function}\
                                       --variable {wildcards.variable}\
+                                      --training_dir {params.training_dir}\
                                       --log_features {params.log_features}\
                                       --inclusive_thresholds {params.inclusive_thresholds}\
-                                      --plot_dir {output.plots}'
+                                      --plot_dir {output.plots};'
+        'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'

@@ -12,11 +12,11 @@ import copy
 from scipy.optimize import curve_fit
 from utils.data_processing import idx_particle_type,idx_feature
 matplotlib.use("Agg") 
-
+import mplhep as hep
+hep.style.use(hep.style.CMS) 
 
 fixed_seed = 2021
 rng = np.random.default_rng(fixed_seed)
-matplotlib.rcParams.update({'font.size': 18})
 markers=['s', 'o', 'D', 'v']
 colors=['g','black','orange','b']
         
@@ -28,13 +28,13 @@ def get_jer(pt,eta,params,eta_bin=3.2):
 
 
 def get_em_correction(eta,eta_bin=1.5):
-    barrel_scale = 0.95
-    endcap_scale = 0.85
+    barrel_scale = 1./0.95
+    endcap_scale = 1./0.85
     return np.where(eta<eta_bin,barrel_scale,endcap_scale)
 
 def get_mu_correction(eta,eta_bin=2.1):
-    barrel_scale = 0.98
-    endcap_scale = 0.95
+    barrel_scale = 1./0.98
+    endcap_scale = 1./0.95
     return np.where(eta<eta_bin,barrel_scale,endcap_scale)
 
 
@@ -69,8 +69,6 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
 
         data = np.concatenate((x_train,x_test,x_val),axis=0).astype('float32')
         ids = np.concatenate((ids_train,ids_test,ids_val),axis=0)
-        #data = np.concatenate((x_train,x_test),axis=0).astype('float32')
-        #ids = np.concatenate((ids_train,ids_test),axis=0)
         del x_train,x_test,x_val, ids_train, ids_test,ids_val
 
     #removing Zll 
@@ -92,6 +90,7 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
     jet_pt_filenames = ['%s_%d.csv'%(jet_pt_filename,jet_bin) for jet_bin in jet_pt_bins]
     for i,jet_bin in enumerate(jet_pt_bins) :
         jes_correction_data[jet_bin] = pd.read_csv(jet_corr_dir+'/'+jet_pt_filenames[i])
+        jes_correction_data[jet_bin]['jet_response'] = 1./jes_correction_data[jet_bin]['jet_response']
         jes_correction_data_array.append(jes_correction_data[jet_bin][['abs_eta_bin_centers','jet_response']].values)
     jes_correction_data_array = np.stack(jes_correction_data_array, axis=0)
 
@@ -111,7 +110,6 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
 
     jet_eta_bins = jes_correction_data_array[0,:,0]
     indecies_pt,indecies_eta = apply_correction(jet_eta_bins,jet_pt_bins,particles_in_jet,jet_pt_idx=pt_idx,jet_eta_idx=eta_idx)
-    jet_pt_correction = jes_correction_data_array[indecies_pt,indecies_eta,1]
 
     jer_eta_bins = ['0p5','3p2_4']
     jer_correction_data = {}
@@ -146,9 +144,10 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
 
     jer_factor =  get_jer(particles_in_jet[:,:,pt_idx],particles_in_jet[:,:,eta_idx],popts)
 
-    jet_pt_jes_jer_factor = jes_correction_data_array[indecies_pt,indecies_eta,1]*\
+    jet_pt_correction = jes_correction_data_array[indecies_pt,indecies_eta,1]
+    jet_pt_jes_jer_factor = jet_pt_correction*\
                         rng.normal(1.0, scale=jer_factor*2, size=jet_pt_correction.shape)*\
-                        rng.normal(0.9, scale=0.05, size=jet_pt_correction.shape)
+                        rng.normal(1.1, scale=0.05, size=jet_pt_correction.shape)
     particles_in_jet_smeared = copy.deepcopy(particles_in_jet)
     particles_in_jet_smeared[:,:,pt_idx]*=jet_pt_jes_jer_factor
 

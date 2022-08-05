@@ -27,7 +27,7 @@ def main_analyze_results(data_file='',variable='',log_features=[],training_dir='
         log_features: list of str, which feature scale to be log
         plot_dir: str, plotting directory
         inclusive_thresholds: list of float, inclusive thresholds for MET
-        training_dir: str, path to the training used TODO : to clean up
+        training_dir: str, path to the training used 
     """
     with h5py.File(data_file,'r') as open_file :
         reco_data = np.array(open_file['smeared_data'])
@@ -57,12 +57,11 @@ def main_analyze_results(data_file='',variable='',log_features=[],training_dir='
     custom_objects = {loss_function.__name__:loss_function,
                     "MseThesholdMetric":nn_losses.MseThesholdMetric}
     model = keras.models.load_model(training_dir+'/best_model',custom_objects = custom_objects)
-    dnn_correction = model.predict([graph_dats.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
-    ###dnn_correction = graph_data.labels[:,0]*np.random.normal(loc=1.0, scale=0.05, size=graph_data.labels.shape[0]) #testing ideal case
-
+    dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
 
     if not os.path.exists(plot_dir):
         os.makedirs(plot_dir) 
+
 
     for proc,proc_id in zip(['W + jets','QCD'],[0,1]):    
         proc_save_name = proc.replace(' ','').replace('+','')
@@ -106,7 +105,7 @@ def main_analyze_results(data_file='',variable='',log_features=[],training_dir='
                                 output_dir=plot_subdir,plot_name=f'plot_{var_name}_{what_to_plot_name}_reco_o_true_{proc_save_name}.pdf')
 
 
-        #Inclusive efficiency plots
+        #Eficiency curves
         for thresh in inclusive_thresholds:
             max_val = np.max(inclusive_thresholds)*3
             nbins=40
@@ -115,39 +114,47 @@ def main_analyze_results(data_file='',variable='',log_features=[],training_dir='
                                 labels=['Baseline','Corrected'],xtitle=r'$%s^{true}$'%(var_name),ytitle='Efficiency',title=proc,nbins=nbins,
                                 output_dir=plot_subdir,plot_name=f'plot_inclusive_eff_{var_name}_{thresh}_{proc_save_name}.pdf')
 
-            offline_thresh = thresh+20
-            offline_mask = evaluator.true_data > offline_thresh
-            for eff_sel in [0.90,0.95]:
-                cut_reco = np.quantile(evaluator.reco_data[offline_mask],1.-eff_sel)
-                cut_corr = np.quantile(evaluator.corr_data[offline_mask],1.-eff_sel)
-                rate_reco = plotting.get_rate_from_threshold(evaluator.reco_data,max_val,cut_reco)
-                rate_corr = plotting.get_rate_from_threshold(evaluator.corr_data,max_val,cut_corr)
-                plotting.plot_efficiency([evaluator.true_data,evaluator.true_data],[evaluator.reco_data,evaluator.corr_data], 
-                                thresholds=[cut_reco,cut_corr],max_x = max_val,
-                                labels=[f'Baseline, {var_name}>{cut_reco:.1f} GeV, \n Rate={rate_reco:.3f}',f'Corrected, {var_name}>{cut_corr:.1f} GeV, \n Rate={rate_corr:.3f}'],
-                                xtitle=r'$%s^{true}$'%(var_name),ytitle='Efficiency',title=proc+f' @ Offline Eff={eff_sel:.2f}',nbins=nbins,
-                                output_dir=plot_subdir,plot_name=f'plot_eff_{var_name}_const_offline_{offline_thresh}_{eff_sel}eff_{proc_save_name}.pdf')
-
-        #Rate plots
+        #Normalized Rate/Total eff plots
+        plot_subdir = plot_dir+'/trigger_rates/'
+        if not os.path.exists(plot_subdir):
+            os.makedirs(plot_subdir)      
         max_val = np.max(inclusive_thresholds)*2
         eff,thresholds = plotting.makeRate(evaluator.reco_data,max_val)
         eff_corr,_ = plotting.makeRate(evaluator.corr_data,max_val)
         plotting.plot_scatter([thresholds,thresholds],[eff,eff_corr],
-                                ['Baseline','Corrected'],xtitle=r'L1 %s threshold'%(var_name),ytitle='Normalized Rate',title=proc,semilogy=True,
+                                ['Baseline','Corrected'],xtitle=r'L1 %s threshold'%(var_name),ytitle='Efficiency above L1 threshold',title=proc,semilogy=True,
                                 output_dir=plot_subdir,plot_name=f'plot_rates_{var_name}_{proc_save_name}.pdf')
 
-        #Efficiency plots for the same rates
-        for reco_thresh in inclusive_thresholds:
-            max_val = np.max(inclusive_thresholds)*4
-            rate = plotting.get_rate_from_threshold(evaluator.reco_data,max_val,reco_thresh)
-            corr_thresh = plotting.get_threshold_from_rate(evaluator.corr_data,max_val,rate)
-            max_val_plot = np.max(inclusive_thresholds)*2
-            nbins=40
-            plotting.plot_efficiency([evaluator.true_data,evaluator.true_data],[evaluator.reco_data,evaluator.corr_data], 
-                                thresholds=[reco_thresh,corr_thresh],max_x = max_val_plot,
-                                labels=[f'Baseline, {var_name}>{reco_thresh:.1f} GeV',f'Corrected, {var_name}>{corr_thresh:.1f} GeV'],
-                                xtitle=r'$%s^{true}$'%(var_name),ytitle='Efficiency',title=proc+f' @ Rate={rate:.3f}',nbins=nbins,
-                                output_dir=plot_subdir,plot_name=f'plot_eff_{var_name}_{reco_thresh}_const_rate_{proc_save_name}.pdf')
+    del evaluator
+    
+
+    proc_sig,proc_id_sig = 'W + jets',0    
+    proc_bg,proc_id_bg = 'QCD',1    
+    proc_mask_sig =  np.where(graph_data.process_ids==proc_id_sig)
+    proc_mask_bg =  np.where(graph_data.process_ids==proc_id_bg)
+    if 'met' in variable:
+        evaluator_sig = data_proc.ResolutionEvaluator(graph_data.reco_met,graph_data.true_met,graph_data.process_ids,dnn_correction,mask=proc_mask_sig)
+        evaluator_bg = data_proc.ResolutionEvaluator(graph_data.reco_met,graph_data.true_met,graph_data.process_ids,dnn_correction,mask=proc_mask_bg)
+    elif 'ht' in variable:
+        evaluator_sig = data_proc.ResolutionEvaluator(graph_data.reco_ht,graph_data.true_ht,graph_data.process_ids,dnn_correction,mask=proc_mask_sig)
+        evaluator_bg = data_proc.ResolutionEvaluator(graph_data.reco_ht,graph_data.true_ht,graph_data.process_ids,dnn_correction,mask=proc_mask_bg)
+
+
+    sig_efficiencies = [0.95,0.9,0.8,0.5,0.2,0.1,0.05,0.01,0.005,0.003,0.001,0.0005,0.0003,0.0001,0.00005,0.00001]
+    sig_thresholds_reco = []
+    sig_thresholds_corr = []
+    bg_eff_reco = []
+    bg_eff_corr = []
+    max_val = np.max(inclusive_thresholds)*4
+    for i,sig_eff in enumerate(sig_efficiencies):
+        sig_thresholds_reco.append(np.quantile(evaluator_sig.reco_data,1.-sig_eff))
+        sig_thresholds_corr.append(np.quantile(evaluator_sig.corr_data,1.-sig_eff))
+        bg_eff_reco.append(np.sum(evaluator_bg.reco_data>sig_thresholds_reco[i])/evaluator_bg.reco_data.shape[0])
+        bg_eff_corr.append(np.sum(evaluator_bg.corr_data>sig_thresholds_corr[i])/evaluator_bg.corr_data.shape[0])        
+
+    plotting.plot_scatter([sig_efficiencies,sig_efficiencies],[bg_eff_reco,bg_eff_corr],
+                            ['Baseline','Corrected'],xtitle='Signal Efficiency',ytitle='Background Efficiency',title=f'Signal - {proc_sig}, Background - {proc_bg}',semilogy=True, semilogx=True,
+                            output_dir=plot_subdir,plot_name=f'plot_ROC_{var_name}.pdf')
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

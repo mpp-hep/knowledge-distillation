@@ -2,15 +2,26 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 
+
+def gaus(x,a,mu,sigma):
+    return a*tf.math.exp(-(x-mu)**2/(2*sigma**2))
+def gaus_2(x,a,mu,sigma):
+    return tf.math.minimum(1./gaus(x,a,mu,sigma),100.)
+
+
 def mse(y_true,y_pred):
     return K.mean( K.square(y_true[:,0] - y_pred[:,0]) )
-
-def mae(y_true,y_pred):
-    return K.mean( K.abs(y_true[:,0] - y_pred[:,0]) )
 
 
 def mae(y_true,y_pred):
     return K.mean( K.abs(y_true[:,0] - y_pred[:,0]))
+
+
+def mse_weighted(y_true,y_pred):
+    diff = K.abs(y_true[:,0]-1.)
+    #weights = tf.where(tf.math.greater_equal(diff,0.5), diff*100.,1.)
+    weights = gaus_2(y_true[:,0],1.55563209, 1.11240506, 0.24694669)
+    return K.mean( K.square(y_true[:,0] - y_pred[:,0]) * weights )
 
 class QuantileLoss(object):
     def __init__(self,taus=[0.5,0.25,0.75],weights=[1.,1.2,0.9]):
@@ -53,12 +64,13 @@ class DiceLoss(object):
         return loss    
 
 
+
+
 class MseThesholdMetric(tf.keras.metrics.Metric):
-    def __init__(self,threshold=0.):
-        name= 'MseThesholdMetric_{}'.format(threshold)
-        super(MseThesholdMetric, self).__init__(name=name)
+    def __init__(self, threshold=0., **kwargs):
+        super().__init__(**kwargs)
         self.res_mse = self.add_weight(name='res_mse', initializer='zeros')
-        self.total_count = self.add_weight(name='res_mse', initializer='zeros')
+        self.total_count = self.add_weight(name='total_count', initializer='zeros')
         self.threshold = threshold           
 
     def update_state(self, y_true, y_pred, sample_weight=None):
@@ -74,26 +86,37 @@ class MseThesholdMetric(tf.keras.metrics.Metric):
         self.res_mse.assign(0)
         self.total_count.assign(0)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"threshold" : self.threshold})
+        return config
+
+    #def from_config(cls, config):
+    #    return cls(**config)
+
 
 def get_loss_func(str_name):
     loss_dictionary = {
         'mse':mse,
         'mae':mae,
+        'mse_weighted':mse_weighted,
     }
-    parsed_name = str_name.split('_')
-    if len(parsed_name)==1:
-        return loss_dictionary[parsed_name[0]]
+    if str_name in loss_dictionary.keys():
+        return loss_dictionary[str_name]
     else:
-        if 'huber' in  parsed_name[0]:
-            return HuberLoss(delta=float(parsed_name[1]))
-        elif 'quantile' in  parsed_name[0]:
-            return QuantileLoss(taus=list(float(parsed_name[1])))
-        elif 'dice' in  parsed_name[0]:
-            return DiceLoss(epsilon=float(parsed_name[1]))
-        else :
-            print('Loss function name is not recognized.')
-            print('Accepted loss functions : mse, mae, huber_floatdelta, ')
-            exit()
+        parsed_name = str_name.split('_')
+        if len(parsed_name)==1:
+            return loss_dictionary[parsed_name[0]]
+        else:
+            if 'huber' in  parsed_name[0]:
+                return HuberLoss(delta=float(parsed_name[1]))
+            elif 'quantile' in  parsed_name[0]:
+                return QuantileLoss(taus=list(float(parsed_name[1])))
+            elif 'dice' in  parsed_name[0]:
+                return DiceLoss(epsilon=float(parsed_name[1]))
+            else :
+                print('Loss function name is not recognized.')
+                exit()
 
 
 
