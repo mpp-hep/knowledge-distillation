@@ -108,22 +108,22 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
                                         metrics=metrics)
 
 
-    #tuner = keras_tuner.Hyperband(hypermodel = hypermodel,
-    #                 objective = keras_tuner.Objective("val_loss", direction="min"),
-    #                 max_epochs = max_epochs,
-    #                 factor=hyperband_factor,
-    #                 hyperband_iterations=1, #this should be as large as computationally possible. Default=1
-    #                 seed=fixed_seed,
-    #                 directory=output_dir,
-    #                 project_name='hyperband_tuner')
-    # RandomSearch is only used for testing
-    tuner = keras_tuner.RandomSearch(
-          hypermodel = hypermodel ,
-          objective=keras_tuner.Objective("val_loss", direction="min"),
-          max_trials=1,
-          directory=output_dir,
-          project_name='hyperband_tuner',
-          )
+    tuner = keras_tuner.Hyperband(hypermodel = hypermodel,
+                     objective = keras_tuner.Objective("val_loss", direction="min"),
+                     max_epochs = max_epochs,
+                     factor=hyperband_factor,
+                     hyperband_iterations=1, #this should be as large as computationally possible. Default=1
+                     seed=fixed_seed,
+                     directory=output_dir,
+                     project_name='hyperband_tuner')
+    ### RandomSearch is only used for testing
+    #tuner = keras_tuner.RandomSearch(
+    #      hypermodel = hypermodel ,
+    #      objective=keras_tuner.Objective("val_loss", direction="min"),
+    #      max_trials=1,
+    #      directory=output_dir,
+    #      project_name='hyperband_tuner',
+    #      )
 
     tuner.search_space_summary()
     callbacks=[
@@ -133,7 +133,7 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     ]
     tuner.search(train_dataset,
              validation_data = val_dataset,
-             epochs=1, #max_epochs!
+             epochs=max_epochs,
              batch_size=batch_size,
              shuffle=False,
              callbacks=callbacks,
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default = 1024, help='batch_size')
     parser.add_argument('--max_epochs', type=int, default = 50, help='Max epochs')
     parser.add_argument('--hyperband_factor', type=int, default = 3, help='Hyperband factor')
-    parser.add_argument('--use_generator', type=bool, default=False, help='True/False to use generator')
+    parser.add_argument('--use_generator', type=int, default=0, help='True/False to use generator')
 
     args = parser.parse_args()
     args.loss_function = nn_losses.get_loss_func(args.loss_function)
@@ -176,6 +176,7 @@ if __name__ == '__main__':
         args.log_features = [str(f) for f in args.log_features.replace(' ','').split(',')]
     else :
         args.log_features=[]    
+    args.use_generator = bool(args.use_generator)
     args.metric_thresholds = [float(f) for f in args.metric_thresholds.replace(' ','').split(',')]
     main_optimize_l1_teacher(**vars(args))
 

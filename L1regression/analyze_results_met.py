@@ -67,14 +67,14 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
     model = keras.models.load_model(training_dir+'/best_model',custom_objects = custom_objects)
 
     if use_generator:
+        print('using generator')
         data_generator = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)),
-
                                                     output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
                                                                         tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
                                                                         tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
                                                                         tf.TensorSpec(shape=(None,2), dtype=tf.float32))
                     )
-        dnn_correction = model.predict(data_generator,batch_size=2048)
+        dnn_correction = model.predict(data_generator)
     else :
         dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
 
@@ -147,7 +147,7 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
 
     del evaluator
     
-
+    #Computing and plotting ROCs
     bg_selection_str = ''
     for bg in bg_names:
         bg_selection_str+='(graph_data.process_ids==%f)|'%ids_names_dict[bg]
@@ -168,22 +168,24 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
         elif 'ht' in variable:
             evaluator_sig = data_proc.ResolutionEvaluator(graph_data.reco_ht,graph_data.true_ht,graph_data.process_ids,dnn_correction,mask=proc_mask_sig)
 
-        sig_efficiencies = [0.95,0.9,0.8,0.5,0.2,0.1,0.05,0.01,0.005,0.003,0.001,0.0005,0.0003,0.0001,0.00005,0.00001]
-        sig_thresholds_reco = []
-        sig_thresholds_corr = []
-        bg_eff_reco = []
-        bg_eff_corr = []
+
+        bg_efficiencies = [0.95,0.5,0.2,0.1,0.08,0.05,0.03,0.01,0.005]
+        bg_eff_thresholds = [0.1,0.01]
+        bg_thresholds_reco = []
+        bg_thresholds_corr = []
+        sig_eff_reco = []
+        sig_eff_corr = []
         max_val = np.max(inclusive_thresholds)*4
-        for i,sig_eff in enumerate(sig_efficiencies):
-            sig_thresholds_reco.append(np.quantile(evaluator_sig.reco_data,1.-sig_eff))
-            sig_thresholds_corr.append(np.quantile(evaluator_sig.corr_data,1.-sig_eff))
-            bg_eff_reco.append(np.sum(evaluator_bg.reco_data>sig_thresholds_reco[i])/evaluator_bg.reco_data.shape[0])
-            bg_eff_corr.append(np.sum(evaluator_bg.corr_data>sig_thresholds_corr[i])/evaluator_bg.corr_data.shape[0])        
+        for i,bg_eff in enumerate(bg_efficiencies):
+            bg_thresholds_reco.append(np.quantile(evaluator_bg.reco_data,1.-bg_eff))
+            bg_thresholds_corr.append(np.quantile(evaluator_bg.corr_data,1.-bg_eff))
+            sig_eff_reco.append(np.sum(evaluator_sig.reco_data>bg_thresholds_reco[i])/evaluator_sig.reco_data.shape[0])
+            sig_eff_corr.append(np.sum(evaluator_sig.corr_data>bg_thresholds_corr[i])/evaluator_sig.corr_data.shape[0])      
 
         bg_names_title = ','.join(bg_names)
-        plotting.plot_scatter([sig_efficiencies,sig_efficiencies],[bg_eff_reco,bg_eff_corr],
-                            ['Baseline','Corrected'],xtitle='Signal Efficiency',ytitle='Background Efficiency',title=f'Signal - {proc_sig}, Background - {bg_names_title}',semilogy=True, semilogx=True,
-                            output_dir=plot_subdir,plot_name=f'plot_ROC_{proc_sig}_{var_name}.pdf')
+        plotting.plot_trigger_roc([bg_efficiencies,bg_efficiencies],[sig_eff_reco,sig_eff_corr],
+                            ['Baseline','Corrected'],xtitle='Background Efficiency',ytitle='Signal Efficiency',title=f'Signal - {proc_sig}, Background - {bg_names_title}',semilogy=True, semilogx=True,
+                            output_dir=plot_subdir,plot_name=f'plot_ROC_{proc_sig}_{var_name}.pdf',thresholds=bg_eff_thresholds)
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -196,12 +198,13 @@ if __name__ == '__main__':
     parser.add_argument('--signal_names', type=str, default='W,hChToTauNu,hToTauTau',help='Which signals to consider')
     parser.add_argument('--bg_names', type=str, default='QCD',help='Which bg to consider')
     parser.add_argument('--plot_dir', type=str, help='Plotting dir')
-    parser.add_argument('--use_generator', type=bool, default=False, help='True/False to use generator')
+    parser.add_argument('--use_generator', type=int, default=0, help='True/False to use generator')
     args = parser.parse_args()
     args.loss_function = nn_losses.get_loss_func(args.loss_function)
     args.inclusive_thresholds = [float(f) for f in args.inclusive_thresholds.replace(' ','').split(',')]
     args.signal_names = [f for f in args.signal_names.replace(' ','').split(',')]
     args.bg_names = [f for f in args.bg_names.replace(' ','').split(',')]
+    args.use_generator = bool(args.use_generator)
     if args.log_features!='':
         args.log_features = [str(f) for f in args.log_features.replace(' ','').split(',')]
     else :

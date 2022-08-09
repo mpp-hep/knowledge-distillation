@@ -121,6 +121,30 @@ def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,semilogx=Fa
         plt.close()
 
 
+def plot_trigger_roc(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,semilogx=False,output_dir='',plot_name='', title='',thresholds=[]):
+    for i in range(len(datas_x)):
+        _ = plt.scatter(datas_x[i],datas_y[i],color=colors_reco_corr[i],marker=markers[i],s=100,label=labels[i])
+    plt.title(title)
+    plt.xlabel(xtitle)
+    plt.ylabel(ytitle)
+    plt.grid(color='gray', linestyle='--', linewidth=0.3)
+    plt.legend(frameon=False)
+    plt.plot(np.linspace(0, 1),np.linspace(0, 1), ':', color='0.75', linewidth=2)
+    for l in thresholds:
+        plt.vlines(l, 0, 1, linestyles='--', color='#ef5675', linewidth=2)
+    if semilogy:
+        plt.semilogy()
+    if semilogx:  
+        plt.semilogx()
+    if output_dir=='' or plot_name=='':
+        print('No output directory set, only showing the plot')
+        plt.show()
+    else:
+        plt.savefig(os.path.join(output_dir, plot_name), bbox_inches="tight")
+        plt.savefig(os.path.join(output_dir, plot_name.replace('.pdf','.png')), bbox_inches="tight")
+        plt.clf()
+        plt.close()
+
 
 def plot_distibutions(datas, labels,xtitle,ytitle,bins=40,output_dir='',plot_name='', title='',semilogy=True, density=False):
     fig = plt.figure()

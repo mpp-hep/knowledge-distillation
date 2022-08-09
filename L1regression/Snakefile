@@ -53,7 +53,7 @@ rule selective_sampling_jets:
 
 rule optimize_l1_teacher:
     input:
-        data_file = 'output/l1_regression_w_sig_test.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
+        data_file = 'output/l1_regression_w_sig_train.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
     params:
         log_features = "''",#'"pt"',
         loss_function = '"huber_1.0"',
@@ -62,9 +62,9 @@ rule optimize_l1_teacher:
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
-        use_generator = 0
+        use_generator = 1
     output:
-        output_dir = directory('output_w_sig_htautau_generator_{variable}/'),
+        output_dir = directory('output_w_sig_htautau_optimize_{variable}/'),
     shell:
         'python optimize_l1_teacher.py --data_file {input.data_file} \
                                       --variable {wildcards.variable}\
@@ -88,7 +88,7 @@ rule analyze_results:
         loss_function = rules.optimize_l1_teacher.params.loss_function,
         inclusive_thresholds = "'100,120,150'", #100,120,150 for met; 200,320,450 for HT
         training_dir=rules.optimize_l1_teacher.output.output_dir,
-        use_generator = 1
+        use_generator = 0
     output:
         plots = directory('plots_output_w_sig_htautau_{variable}/'),
     shell:
