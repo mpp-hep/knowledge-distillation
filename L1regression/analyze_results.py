@@ -57,7 +57,7 @@ def main_analyze_results(data_file='',variable='',log_features=[],training_dir='
     custom_objects = {loss_function.__name__:loss_function,
                     "MseThesholdMetric":nn_losses.MseThesholdMetric}
     model = keras.models.load_model(training_dir+'/best_model',custom_objects = custom_objects)
-    dnn_correction = model.predict([graph_dats.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
+    dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
     ###dnn_correction = graph_data.labels[:,0]*np.random.normal(loc=1.0, scale=0.05, size=graph_data.labels.shape[0]) #testing ideal case
 
 

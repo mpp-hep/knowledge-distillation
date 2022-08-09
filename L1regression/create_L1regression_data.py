@@ -20,6 +20,7 @@ rng = np.random.default_rng(fixed_seed)
 markers=['s', 'o', 'D', 'v']
 colors=['g','black','orange','b']
         
+
 def energy_res_function(x, a, b,c):
     return np.where(x>0,np.sqrt(a/np.power(x,2)+b/x+c),0.)
     
@@ -65,15 +66,23 @@ def get_met_ht(lorentz_all_particles,idx_jets=8):
 
 def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_dir='',jet_corr_dir='', jet_pt_filename='',jet_eta_filename='',train_test_split=0.8):
     with open(data_file, 'rb') as f:
-        x_train, _,x_test, _, x_val, _,_,_,ids_train, ids_test, ids_val, ids_names  = pickle.load(f)
+        x_train, _,x_test, _, x_val, _,all_bsm_data,_,ids_train, ids_test, ids_val, ids_names  = pickle.load(f)
 
-        data = np.concatenate((x_train,x_test,x_val),axis=0).astype('float32')
-        ids = np.concatenate((ids_train,ids_test,ids_val),axis=0)
-        del x_train,x_test,x_val, ids_train, ids_test,ids_val
+        ids_names = list(ids_names)
+        BSM_SAMPLES = {'Leptoquark':0, 'A to 4 leptons':1, 'hChToTauNu':2, 'hToTauTau':3}
+        ids_bsm_hChToTauNu = np.ones(all_bsm_data[BSM_SAMPLES['hChToTauNu']].shape[0],dtype=int)*(BSM_SAMPLES['hChToTauNu']+1)*100
+        ids_bsm_hToTauTau = np.ones(all_bsm_data[BSM_SAMPLES['hToTauTau']].shape[0],dtype=int)*(BSM_SAMPLES['hToTauTau']+1)*100
+        ids_names.append('%s_%d'%('hChToTauNu',(BSM_SAMPLES['hChToTauNu']+1)*100))
+        ids_names.append('%s_%d'%('hToTauTau',(BSM_SAMPLES['hToTauTau']+1)*100))
+        data = np.concatenate((x_train,x_test,x_val,all_bsm_data[BSM_SAMPLES['hChToTauNu']],all_bsm_data[BSM_SAMPLES['hToTauTau']]),axis=0).astype('float32')
+        ids = np.concatenate((ids_train,ids_test,ids_val,ids_bsm_hChToTauNu,ids_bsm_hToTauTau),axis=0)
+        ids = ids.astype(int)
+        del x_train,x_test,x_val,all_bsm_data, ids_train, ids_test,ids_val,ids_bsm_hChToTauNu,ids_bsm_hToTauTau
 
     #removing Zll 
     data = data[ids!=2] #2 is index of Zll
     ids = ids[ids!=2] #2 is index of Zll
+    ids_names.remove('Z_2')
 
     idx_jet_0 = idx_particle_type['jet'][0]+1
     pt_idx = int(idx_feature['pt'])
@@ -204,7 +213,7 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
             h5f.create_dataset('true_ht', data=ht[indecies].reshape(-1))   
             h5f.create_dataset('original_met', data=original_met[select_reco_jets][indecies].reshape(-1))             
             h5f.create_dataset('ids', data=ids[select_reco_jets][indecies].reshape(-1))    
-            h5f.create_dataset('ids_names', data=ids_names[[0,1,3]])     #without Z
+            h5f.create_dataset('ids_names', data=ids_names)
 
 
 if __name__ == '__main__':

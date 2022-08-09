@@ -12,6 +12,7 @@ from keras_dgl.layers import GraphAttentionCNN,MultiGraphCNN,MultiGraphAttention
 
 
 class GraphAttentionHyperModel(keras_tuner.HyperModel):
+    'Graph Attention Hyper Model '
     def __init__(self, features_input_shape, adjancency_input_shape, filters_input_shape,emb_input_size, embedding_idx, num_filters, loss_function,metrics=[]):
         self.features_input_shape = features_input_shape
         self.adjancency_input_shape = adjancency_input_shape

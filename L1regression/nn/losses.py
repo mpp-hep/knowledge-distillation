@@ -24,6 +24,7 @@ def mse_weighted(y_true,y_pred):
     return K.mean( K.square(y_true[:,0] - y_pred[:,0]) * weights )
 
 class QuantileLoss(object):
+    'Quantile Loss '
     def __init__(self,taus=[0.5,0.25,0.75],weights=[1.,1.2,0.9]):
         if isinstance(taus, float):
             taus = np.array([taus]) 
@@ -37,6 +38,7 @@ class QuantileLoss(object):
         return K.mean(self.weights*( self.taus*e + K.clip( -e, K.epsilon(), np.inf ) ))
 
 class HuberLoss(object):
+    'Huber Loss '
     def __init__(self,delta=1.):
         self.delta = delta
         self.n_params = 1
@@ -49,6 +51,7 @@ class HuberLoss(object):
 
 
 class DiceLoss(object):
+    'Dice Loss '
     def __init__(self,epsilon=1.):
         self.__name__ = 'DiceLoss'
         self.epsilon = epsilon
@@ -67,6 +70,7 @@ class DiceLoss(object):
 
 
 class MseThesholdMetric(tf.keras.metrics.Metric):
+    'MSE Theshold Metric '
     def __init__(self, threshold=0., **kwargs):
         super().__init__(**kwargs)
         self.res_mse = self.add_weight(name='res_mse', initializer='zeros')

@@ -6,8 +6,8 @@ rule prepare_L1_regression_data:
         data = config['dataset'],
         jet_corr_dir = config['jet_corr_dir']
     output:
-        outfile_train = 'output/l1_regression_train.h5',
-        outfile_test = 'output/l1_regression_test.h5'
+        outfile_train = 'output/l1_regression_w_sig_train.h5',
+        outfile_test = 'output/l1_regression_w_sig_test.h5'
     params:
         train_test_split = 0.8,
         jet_pt_filename = config['jet_pt_filename'],
@@ -31,8 +31,8 @@ rule selective_sampling_jets:
     params:
         fractions_to_keep = '"0."',
         mode = '"=="',
-        sampling_threshold = 80, #met 180, ht 400, true_ht_over_reco_ht = 2
-        txt_outfile = 'output/jet_summary_stat.txt',
+        sampling_threshold = 180, #met 180, ht 400, true_ht_over_reco_ht = 2
+        txt_outfile = 'output/jet_summary_stat_{sampling_var}.txt',
     output:
         outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
         outfile_discarded = 'output/l1_regression_train_discarded_{sampling_var}.h5',
@@ -53,7 +53,7 @@ rule selective_sampling_jets:
 
 rule optimize_l1_teacher:
     input:
-        data_file = 'output/l1_regression_train_selective_{variable}.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
+        data_file = 'output/l1_regression_w_sig_test.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
     params:
         log_features = "''",#'"pt"',
         loss_function = '"huber_1.0"',
@@ -62,8 +62,9 @@ rule optimize_l1_teacher:
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
+        use_generator = 0
     output:
-        output_dir = directory('output_optimization_{variable}/'),
+        output_dir = directory('output_w_sig_htautau_generator_{variable}/'),
     shell:
         'python optimize_l1_teacher.py --data_file {input.data_file} \
                                       --variable {wildcards.variable}\
@@ -74,27 +75,30 @@ rule optimize_l1_teacher:
                                       --batch_size {params.batch_size}\
                                       --max_epochs {params.max_epochs}\
                                       --hyperband_factor {params.hyperband_factor}\
-                                      --output_dir {output.output_dir}'
+                                      --output_dir {output.output_dir}\
+                                      --use_generator {params.use_generator}'
 
                                       
 
 rule analyze_results:
     input:
-        data_file = 'output/l1_regression_test.h5' #'output/l1_regression_train_selective_true_ht_over_reco_ht.h5' #'output/l1_regression_train_selective_{variable}.h5' # 'output/l1_regression_test.h5' 
+        data_file = 'output/l1_regression_w_sig_test.h5' #'output/l1_regression_train_selective_true_ht_over_reco_ht.h5' #'output/l1_regression_train_selective_{variable}.h5'
     params:
         log_features = rules.optimize_l1_teacher.params.log_features,
         loss_function = rules.optimize_l1_teacher.params.loss_function,
-        inclusive_thresholds = "'200,320,450'", #100,120,150 for met; 200,320,450 for HT
-        training_dir=rules.optimize_l1_teacher.output.output_dir
+        inclusive_thresholds = "'100,120,150'", #100,120,150 for met; 200,320,450 for HT
+        training_dir=rules.optimize_l1_teacher.output.output_dir,
+        use_generator = 1
     output:
-        plots = directory('plots_output_invert2_{variable}/'),
+        plots = directory('plots_output_w_sig_htautau_{variable}/'),
     shell:
         'mkdir -p {output.plots};'
-        'python analyze_results.py --data_file {input.data_file} \
+        'python analyze_results_met.py --data_file {input.data_file} \
                                       --loss_function {params.loss_function}\
                                       --variable {wildcards.variable}\
                                       --training_dir {params.training_dir}\
                                       --log_features {params.log_features}\
                                       --inclusive_thresholds {params.inclusive_thresholds}\
-                                      --plot_dir {output.plots};'
+                                      --plot_dir {output.plots}\
+                                      --use_generator {params.use_generator};'
         'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'

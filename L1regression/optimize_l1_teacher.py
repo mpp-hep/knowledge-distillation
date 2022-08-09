@@ -4,6 +4,7 @@ import argparse
 import h5py
 import numpy as np
 import logging
+import random
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow.keras.backend as K
@@ -21,7 +22,7 @@ tf.keras.utils.set_random_seed(fixed_seed)
 
 def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_function='',metric_thresholds='',
                             test_split=0.2,batch_size=1024,max_epochs=1,hyperband_factor=3,
-                            output_dir=''):
+                            output_dir='',use_generator=''):
     """
     Performs optimization of the teacher model
     Arguments:
@@ -35,6 +36,7 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         max_epochs: int, max epochs
         hyperband_factor: int, hyperband_factor
         output_dir: str, output directory
+        use_generator: bool, whether to use data generator or not
     """
     tracking_address = output_dir+'/tb_logs' 
     with h5py.File(data_file,'r') as open_file :
@@ -58,13 +60,42 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     elif variable=='true_ht':
         emb_input_size = 0
         embedding_idx = -1
-
         graph_data = data_proc.HTGraphCreator(reco_data,reco_ht,true_ht,ids,log_features=log_features)
+
+
+    #graph_data.apply_mask_on_graph(graph_data.true_met>70)
+    graph_data.apply_mask_on_graph(graph_data.process_ids==400)
 
     num_filters=1
     graph_conv_filters = graph_data.adjacency
     graph_conv_filters = K.constant(graph_conv_filters)
-    
+
+    #split the data in train and test:
+    indices = list(range(len(graph_data.features)))
+    random.shuffle(indices)
+    train_test_idx_split = int(len(indices)*test_split)
+    val_indices = np.ones(len(indices), dtype=bool)
+    val_indices[train_test_idx_split:] = False
+    train_indices = np.ones(len(indices), dtype=bool)
+    train_indices[:train_test_idx_split] = False
+    if use_generator:
+        train_dataset = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features[train_indices], 
+                                                                                                            graph_data.adjacency[train_indices],
+                                                                                                            graph_conv_filters[train_indices],
+                                                                                                            graph_data.labels[train_indices], 
+                                                                                                            batch_size=batch_size)),
+                                                        output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
+                                                        tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
+                                                        tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
+                                                        tf.TensorSpec(shape=(None,2), dtype=tf.float32))
+                                                        ).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
+    else :
+        train_dataset = ([graph_data.features[train_indices], graph_data.adjacency[train_indices],graph_conv_filters[train_indices]],graph_data.labels[train_indices])
+    #Validation data always fits in the memory. Otherwise, change to generator as well
+    val_dataset = ([graph_data.features[val_indices], graph_data.adjacency[val_indices],graph_conv_filters[val_indices]],graph_data.labels[val_indices])
+
+
     hp = keras_tuner.HyperParameters()
     metrics = [nn_losses.MseThesholdMetric(name=f'MseThesholdMetric_{t}',threshold=t) for t in metric_thresholds]
     hypermodel = GraphAttentionHyperModel(features_input_shape=(graph_data.features.shape[1],graph_data.features.shape[2]), 
@@ -100,11 +131,11 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, verbose=1, min_lr=1e-9),
         TensorBoard(log_dir=tracking_address, histogram_freq=1),
     ]
-    tuner.search([graph_data.features, graph_data.adjacency,graph_conv_filters],graph_data.labels,
-             validation_split=test_split,
-             epochs=1, #max_epochs
+    tuner.search(train_dataset,
+             validation_data = val_dataset,
+             epochs=1, #max_epochs!
              batch_size=batch_size,
-             shuffle=True,
+             shuffle=False,
              callbacks=callbacks,
              use_multiprocessing=True,
              workers=3)
@@ -114,11 +145,11 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     best_model = tuner.get_best_models()[0]
     best_model.build(graph_data.features.shape[1:])
     best_model.summary()
-    best_model.fit([graph_data.features, graph_data.adjacency,graph_conv_filters],graph_data.labels,
-             validation_split=test_split,
+    best_model.fit(train_dataset,
+             validation_data = val_dataset,
              epochs=max_epochs,
-             batch_size=batch_size,
-             shuffle=True,
+             batch_size=batch_size, 
+             shuffle=False,
              callbacks=callbacks,
              use_multiprocessing=True,
              workers=3)
@@ -137,6 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default = 1024, help='batch_size')
     parser.add_argument('--max_epochs', type=int, default = 50, help='Max epochs')
     parser.add_argument('--hyperband_factor', type=int, default = 3, help='Hyperband factor')
+    parser.add_argument('--use_generator', type=bool, default=False, help='True/False to use generator')
 
     args = parser.parse_args()
     args.loss_function = nn_losses.get_loss_func(args.loss_function)
