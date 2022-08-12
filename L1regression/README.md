@@ -60,7 +60,41 @@ will run the rule 'selective_sampling_jets' with wildcard being 'true_met'
 
 Typically you do not need to change anything in the script 'create_L1regression_data.py'. 
 This script prepares the data where objects are smeared (smeared_data, smeared_met, smeared_ht, or true_..). 
-There is also 'original_met' that is there if we want to really regress to more process dependent MET, but in principle we do not want that.
+There is also 'original_met' that is there if we want to really regress to more process dependent MET, but we do not want that as
+this would make out trigger biases. So you can safely ignore it, and only work with smeared and true values.
+
+All information related to the indexing of the new dataset is stored in utils/data_processing.py 
+
+
+### Applying additional selections
+Additional selections might be needed for your training dataset, the code selective_sampling_jets.py does exactly this. Several options are available : 
+ - select events based on process (W, QCD, hChToTauNu, hToTauTau)
+ - remove events with given number of jets in the given proportions : --fractions_to_keep
+ - selectively subsample dataset based on the variable of interest and the threshold. E.g. with --sampling_var=true_met, and --sampling_threshold=110, 
+ the script will produce a dataset with true_met spectrum being uniform from 0 to 110, and then falling like in the original dataset.
+ Such procedure might be needed if the spectrum is very unbalanced, and during the trainig only the information from this over represented part of the dataset are being learned. 
+Any or all of these options can be applied in one go, but they will be processed in the same order as defined above.
+ 
+ 
+### Training a regression :
+
+In principle, the code is set up to train either MET regression or HT regression.
+
+- MET regression : use all objects in the event (mu, e/g, jets) with their pt,eta,phi and their PID (partcle id), smeared MET, smeared HT, and regress to MET_true/MET_reco, that will serve as the MET correction for the final MET trigger. Data preparation is done in the class METGraphCreator (utils/data_processing.py)
+- HT regression : do the same, but train on jets only with their pt,eta,phi + smeared HT, to regress to HT_true/HT_reco.  Data preparation is done in the class HTGraphCreator (utils/data_processing.py), which additionally keeps only jets. 
+
+
+For the knowledge distillation we decided to do MET regression, so your variable of interest (--variable) is met, not ht. But again, the code is set up such that you can also run everything for HT regression. Appropriate data handling classes (METGraphCreator or HTGraphCreator) are picked up by the code.
+
+The teacher model is a graph convolutional neural network with attention defined in nn/models.py. If MET regression is used, the PID of the objects has to be embedded. Again, this embedding layer is added automatically to the model, if variable of interest (--variable) is met.
+
+The teacher model is set up as a HyperModel from keras hyper tuner, so the hyperparameters of the model can be optimized 
+(this will be done once, and these parameters will be fixed to these optimized values through out all knowledge distillation studies)
+
+If you want to train on full dataset and it does not fit in the memory, use the option --use_generator=1. 
+
+### Evaluating the performance :
+All results are analyzed in analyze_results_met.py
 
 
 
