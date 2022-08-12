@@ -191,6 +191,7 @@ class DataGenerator(keras.utils.Sequence):
         if self.shuffle:
             random.shuffle(self.indices)
 
+
 def make_gen_callable(_gen):
     def gen():
         for x,y in _gen:

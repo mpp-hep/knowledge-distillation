@@ -79,7 +79,7 @@ def create_L1regression_data(data_file='',outfile_train='',outfile_test='',plot_
         ids = ids.astype(int)
         del x_train,x_test,x_val,all_bsm_data, ids_train, ids_test,ids_val,ids_bsm_hChToTauNu,ids_bsm_hToTauTau
 
-    #removing Zll 
+    #removing Zll because it does not work well with the scaling of jets (taus and e/mu too different)
     data = data[ids!=2] #2 is index of Zll
     ids = ids[ids!=2] #2 is index of Zll
     ids_names.remove('Z_2')

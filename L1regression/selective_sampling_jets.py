@@ -55,11 +55,12 @@ def downsample_training(data,idx_jet,jet_pt_idx,fractions_to_keep,mode="=="):
     indecies_to_test[indecies_to_train] = False
     return indecies_to_train, indecies_to_test 
 
-def main_selective_sampling_jets(data_file='',fractions_to_keep=[1.], mode="==", outfile='',sampling_var='',sampling_threshold=0, outfile_discarded='',txt_outfile='',plot_dir=''):
+def main_selective_sampling_jets(data_file='',proc_names='',fractions_to_keep=[1.], mode="==", outfile='',sampling_var='',sampling_threshold=0, outfile_discarded='',txt_outfile='',plot_dir=''):
     """
     Performs selective sub sampling, and saves files with selected events and discarded events
     Arguments:
         data_file: str, path to the input file 
+        proc_names: list of str, processes to keep
         fractions_to_keep: list, fraction of jets to keep, starting from 0 jets. E.g. [1.,0.2] : will keep 100% of events with 0 jets, and only 20% of events with 1 jet
         sampling_var: str, which variable apply sampling on (true/original MET or HT, or ratio), if empty - no sampling is applied
         sampling_threshold: float, threshold form when to flatten MET/HT spectrum (sampling_var)
@@ -72,8 +73,14 @@ def main_selective_sampling_jets(data_file='',fractions_to_keep=[1.], mode="==",
     with h5py.File(data_file,'r') as open_file :
         ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
+        ids_names_dict = data_proc.get_process_id_dict(ids_names)
 
-        mask = ids>=0 #(ids==400)|(ids==1)
+        proc_selection_str = ''
+        for proc in proc_names:
+            proc_selection_str+='(ids==%f)|'%ids_names_dict[bg]
+        proc_selection_str=proc_selection_str[:-1] # remove the last "|"
+        mask = np.where(eval(proc_selection_str))
+        
         reco_data = np.array(open_file['smeared_data'])[mask]
         reco_met = np.array(open_file['smeared_met'])[mask]
         reco_ht = np.array(open_file['smeared_ht'])[mask]
@@ -140,14 +147,16 @@ if __name__ == '__main__':
     parser.add_argument('--data_file', type=str, help='Where is the data')
     parser.add_argument('--fractions_to_keep', type=str, default='0.', help='Fractions of jets to keep, starting from 0 jets')
     parser.add_argument('--mode', type=str, default='==',help='Mode for jets selection : == or >=')
-    parser.add_argument('--sampling_var', type=str, default='', help='Which variable apply sampling on (true/original MET or HT)')
+    parser.add_argument('--sampling_var', type=str, default='', help='Variable to apply sampling on (true/original MET or HT)')
     parser.add_argument('--sampling_threshold', type=float, default=180, help='MET or HT value threshold for sampling')
     parser.add_argument('--outfile', type=str, help='Output file with events for the training')
     parser.add_argument('--outfile_discarded', type=str, help='Output file with discarded events not used for the training')
+    parser.add_argument('--proc_names', type=str, default='QCD,W,hChToTauNu,hToTauTau',help='Processes to keep')
     parser.add_argument('--txt_outfile', type=str, help='Output txt file for printout ')
     parser.add_argument('--plot_dir', type=str, help='Plotting dir')
     args = parser.parse_args()
     args.fractions_to_keep = [float(f) for f in args.fractions_to_keep.replace(' ','').split(',')]
+    args.proc_names = [f for f in args.proc_names.replace(' ','').split(',')]
     main_selective_sampling_jets(**vars(args))
 
 

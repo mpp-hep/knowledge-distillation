@@ -31,7 +31,8 @@ rule selective_sampling_jets:
     params:
         fractions_to_keep = '"0."',
         mode = '"=="',
-        sampling_threshold = 110, #met 180, ht 400, true_ht_over_reco_ht = 2
+        proc_names = '"QCD,W,hChToTauNu,hToTauTau"',
+        sampling_threshold = 110, #met around(~) 110-180, ht ~400, true_ht_over_reco_ht = ~2
         txt_outfile = 'output/jet_summary_stat_{sampling_var}.txt',
     output:
         outfile = 'output/l1_regression_train_selective_qcd_htautau_{sampling_var}.h5',
@@ -40,6 +41,7 @@ rule selective_sampling_jets:
     shell:
         'mkdir -p {output.plots};'
         'python selective_sampling_jets.py --data_file {input.data_train} \
+                                      --proc_names {params.proc_names},\
                                       --fractions_to_keep {params.fractions_to_keep}\
                                       --mode {params.mode}\
                                       --sampling_var {wildcards.sampling_var}\
@@ -55,15 +57,15 @@ rule optimize_l1_teacher:
     input:
         data_file = 'output/l1_regression_w_sig_train.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
     params:
-        log_features = "''",#'"pt"',
+        log_features = "''",#'"pt,met"',
         loss_function = '"huber_1.0"',
-        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met
+        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met in GeV, and if log is applied in log_features, it has to be different numbers (~2-3)
         test_split = 0.2,
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
         use_generator = 0,
-        max_events=1000000
+        max_events=1000000 #-1
     output:
         output_dir = directory('output_w_sig_no_w_{variable}/'),
     shell:
@@ -105,4 +107,4 @@ rule analyze_results:
                                       --plot_dir {output.plots}\
                                       --signal_names {params.signal_names}\
                                       --use_generator {params.use_generator};'
-        'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'
+      #  'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'

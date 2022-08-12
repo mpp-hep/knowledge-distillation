@@ -241,11 +241,11 @@ def plot_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title=''
         mpv = bin_centers[int(np.argmax(yval))]
         mask_width=0.2
         mask = (bin_centers>mpv*mask_width) & (bin_centers<mpv*(1.+mask_width))
-      #  popt,pcov = curve_fit(gaus,bin_centers[mask],yval[mask])
+        popt,pcov = curve_fit(gaus,bin_centers[mask],yval[mask])
         _ = plt.step(bin_centers,yval,linewidth=2,color=colors_reco_corr[i],where='mid',
                     label=labels[i]+f'\n mean={mean:.2f}, mpv={mpv:.2f}')
-      #  plt.plot(bin_centers,gaus(bin_centers,*popt),linewidth=1, linestyle='--', color=colors_reco_corr[i],
-      #              label='fit gaus ' + f'\n $\mu$={popt[1]:.2f}, $\sigma$={popt[2]:.2f}')
+        plt.plot(bin_centers,gaus(bin_centers,*popt),linewidth=1, linestyle='--', color=colors_reco_corr[i],
+                    label='fit gaus ' + f'\n $\mu$={popt[1]:.2f}, $\sigma$={popt[2]:.2f}')
 
     plt.title(title)
     plt.xlabel(xtitle)

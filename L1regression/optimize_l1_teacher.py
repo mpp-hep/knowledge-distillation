@@ -43,15 +43,14 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     with h5py.File(data_file,'r') as open_file :
         ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
-        mask = ids>=0
-        reco_data = np.array(open_file['smeared_data'])[mask]
-        reco_met = np.array(open_file['smeared_met'])[mask]
-        reco_ht = np.array(open_file['smeared_ht'])[mask]
-        true_data = np.array(open_file['true_data'])[mask]
-        true_met = np.array(open_file['true_met'])[mask]
-        original_met = np.array(open_file['original_met'])[mask]
-        true_ht = np.array(open_file['true_ht'])[mask]
-        ids = np.array(open_file['ids'])[mask]
+        reco_data = np.array(open_file['smeared_data'])
+        reco_met = np.array(open_file['smeared_met'])
+        reco_ht = np.array(open_file['smeared_ht'])
+        true_data = np.array(open_file['true_data'])
+        true_met = np.array(open_file['true_met'])
+        original_met = np.array(open_file['original_met'])
+        true_ht = np.array(open_file['true_ht'])
+        #ids = np.array(open_file['ids'])
     
     emb_input_size = len(np.unique(reco_data[data_proc.idx_feature_for_met['pid']]))
     embedding_idx = data_proc.idx_feature_for_met['pid']
@@ -63,9 +62,6 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         emb_input_size = 0
         embedding_idx = -1
         graph_data = data_proc.HTGraphCreator(reco_data,reco_ht,true_ht,ids,log_features=log_features)
-
-
-    graph_data.features, graph_data.adjacency,  graph_data.labels, graph_data.process_ids = graph_data.apply_mask_on_graph(graph_data.process_ids<2)
     
     num_filters=1
     graph_conv_filters = graph_data.adjacency
@@ -87,17 +83,6 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
                                                 graph_data.labels[train_indices], 
                                                 batch_size=batch_size,
                                                 shuffle=True)
-       #train_dataset = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features[train_indices], 
-       #                                                                                                     graph_data.adjacency[train_indices],
-       #                                                                                                     graph_conv_filters[train_indices],
-       #                                                                                                     graph_data.labels[train_indices], 
-       #                                                                                                     batch_size=batch_size)),
-       #                                                 output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
-       #                                                 tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
-       #                                                 tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
-       #                                                 tf.TensorSpec(shape=(None,2), dtype=tf.float32))
-       #                                                 ).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-
     else :
         train_dataset = ([graph_data.features[train_indices], graph_data.adjacency[train_indices],graph_conv_filters[train_indices]],graph_data.labels[train_indices])
     #Validation data always fits in the memory. Otherwise, change to generator as well
@@ -121,7 +106,7 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
                      max_epochs = max_epochs,
                      factor=hyperband_factor,
                      hyperband_iterations=1, #this should be as large as computationally possible. Default=1
-                   ### overwrite=False,
+                   ### overwrite=False, # set to False only if the training was killed, and you just want to load the scanned points and re-fit the best model again, otherwise True by default
                      seed=fixed_seed,
                      directory=output_dir,
                      project_name='hyperband_tuner')
@@ -146,10 +131,15 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
              'shuffle' :False,
              'epochs':max_epochs,
              'callbacks' :callbacks,
-             'use_multiprocessing' :False,
-            # 'workers' :3
+             'use_multiprocessing' :False 
              }
-
+    ### No need for multiprocessing for such simple data reading. 
+    ### Moreover, Sequence does not work well with multiprocessing. 
+    ### For multiprocessing, tf.data.Dataset.from_generator should be used.
+    ### However, in that case in the implementation of current generator, 
+    ### it will copy all data to the gpu -> which is not going to fit.
+    ### Possibly there is a work around, but it is irrelevant for this case
+    ### Simple do not use multiprocessing + generator.  
     if use_generator : 
         tuner.search(train_dataset,**fit_dict) 
     else:

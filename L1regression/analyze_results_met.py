@@ -46,14 +46,14 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
         use_generator: bool, whether to use data generator or not
     """
     with h5py.File(data_file,'r') as open_file :
-        reco_data = np.array(open_file['smeared_data'])[:3000000]
-        reco_met = np.array(open_file['smeared_met'])[:3000000]
-        reco_ht = np.array(open_file['smeared_ht'])[:3000000]
-        true_data = np.array(open_file['true_data'])[:3000000]
-        true_met = np.array(open_file['true_met'])[:3000000]
-        original_met = np.array(open_file['original_met'])[:3000000]
-        true_ht = np.array(open_file['true_ht'])[:3000000]
-        ids = np.array(open_file['ids'])[:3000000]
+        reco_data = np.array(open_file['smeared_data'])
+        reco_met = np.array(open_file['smeared_met'])
+        reco_ht = np.array(open_file['smeared_ht'])
+        true_data = np.array(open_file['true_data'])
+        true_met = np.array(open_file['true_met'])
+        original_met = np.array(open_file['original_met'])
+        true_ht = np.array(open_file['true_ht'])
+        ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
 
     ids_names_dict = data_proc.get_process_id_dict(ids_names)
@@ -76,14 +76,8 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
     model = keras.models.load_model(training_dir+'/best_model',custom_objects = custom_objects)
 
     if use_generator:
-        print('using generator')
+        print('Using generator')
         data_generator = data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)
-        #data_generator = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)),
-        #                                            output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
-        #                                                                tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
-        #                                                                tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
-        #                                                                tf.TensorSpec(shape=(None,2), dtype=tf.float32))
-        #            )
         dnn_correction = model.predict(data_generator)
     else :
         dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
