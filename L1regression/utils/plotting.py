@@ -122,20 +122,29 @@ def plot_scatter(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,semilogx=Fa
 
 
 def plot_trigger_roc(datas_x,datas_y,labels,xtitle,ytitle,semilogy=False,semilogx=False,output_dir='',plot_name='', title='',thresholds=[]):
+    fig, axs = plt.subplots(2,figsize=(12,15), gridspec_kw={'height_ratios': [3, 1]})
     for i in range(len(datas_x)):
-        _ = plt.scatter(datas_x[i],datas_y[i],color=colors_reco_corr[i],marker=markers[i],s=100,label=labels[i])
-    plt.title(title)
-    plt.xlabel(xtitle)
-    plt.ylabel(ytitle)
-    plt.grid(color='gray', linestyle='--', linewidth=0.3)
-    plt.legend(frameon=False)
-    plt.plot(np.linspace(0, 1),np.linspace(0, 1), ':', color='0.75', linewidth=2)
+        _ = axs[0].scatter(datas_x[i],datas_y[i],color=colors_reco_corr[i],marker=markers[i],s=100,label=labels[i])
+    axs[0].set_title(title)
+    axs[0].set_ylabel(ytitle)
+    axs[0].grid(color='gray', linestyle='--', linewidth=0.3)
+    axs[0].legend(frameon=False)
+    axs[0].plot(np.linspace(0, 1),np.linspace(0, 1), ':', color='0.75', linewidth=2)
     for l in thresholds:
-        plt.vlines(l, 0, 1, linestyles='--', color='#ef5675', linewidth=2)
+        axs[0].vlines(l, 0, 1, linestyles='--', color='#ef5675', linewidth=2)
     if semilogy:
-        plt.semilogy()
+        axs[0].semilogy()
     if semilogx:  
-        plt.semilogx()
+        axs[0].semilogx()
+
+    for i in range(len(datas_y)-1):
+        _ = axs[1].scatter(datas_x[i],np.array(datas_y[i+1])/np.array(datas_y[0])-1.,color=colors_reco_corr[i+1],marker=markers[i+1],s=100)
+    if semilogx:  
+        axs[0].semilogx()
+    axs[1].set_ylabel(r'$\frac{\Delta}{\mathrm{%s}}$'%labels[0])
+    axs[1].set_xlabel(xtitle)
+    axs[1].grid(color='gray', linestyle='--', linewidth=0.3)
+    #axs[1].set_ylim([0, 0.1])
     if output_dir=='' or plot_name=='':
         print('No output directory set, only showing the plot')
         plt.show()
@@ -232,11 +241,11 @@ def plot_ratios(datas, labels,xtitle,ytitle,output_dir='',plot_name='', title=''
         mpv = bin_centers[int(np.argmax(yval))]
         mask_width=0.2
         mask = (bin_centers>mpv*mask_width) & (bin_centers<mpv*(1.+mask_width))
-        popt,pcov = curve_fit(gaus,bin_centers[mask],yval[mask])
+      #  popt,pcov = curve_fit(gaus,bin_centers[mask],yval[mask])
         _ = plt.step(bin_centers,yval,linewidth=2,color=colors_reco_corr[i],where='mid',
                     label=labels[i]+f'\n mean={mean:.2f}, mpv={mpv:.2f}')
-        plt.plot(bin_centers,gaus(bin_centers,*popt),linewidth=1, linestyle='--', color=colors_reco_corr[i],
-                    label='fit gaus ' + f'\n $\mu$={popt[1]:.2f}, $\sigma$={popt[2]:.2f}')
+      #  plt.plot(bin_centers,gaus(bin_centers,*popt),linewidth=1, linestyle='--', color=colors_reco_corr[i],
+      #              label='fit gaus ' + f'\n $\mu$={popt[1]:.2f}, $\sigma$={popt[2]:.2f}')
 
     plt.title(title)
     plt.xlabel(xtitle)

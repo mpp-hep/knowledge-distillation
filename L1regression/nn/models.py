@@ -55,11 +55,12 @@ class GraphAttentionHyperModel(keras_tuner.HyperModel):
 
             x = keras.layers.Dropout(hp.Float("dropout_" + str(i), 0, 0.05, step=0.02))(x)
 
-        x = keras.layers.Lambda(lambda x: K.sum(x, axis=1))(x)  # adding a node invariant layer (sum/mean/max/min) to make sure output does not depends upon the node order in a graph.
-        output = keras.layers.Dense(1, activation=activation)(x)
+        x = keras.layers.Lambda(lambda x: K.max(x, axis=1))(x)  # adding a node invariant layer (sum/mean/max/min) to make sure output does not depends upon the node order in a graph.
+        
+        output = keras.layers.Dense(1, activation='relu')(x)
         model = Model(inputs=[features_input, adjancency_input, filters_input], outputs=output, name='graph_att_model')
     
-        hp_learning_rate = hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4])
+        hp_learning_rate = hp.Choice("learning_rate", values=[1e-02,1e-3,1e-4])
     
         model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
                   loss=self.loss_function,

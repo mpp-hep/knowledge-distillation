@@ -20,6 +20,16 @@ matplotlib.use("Agg")
 fixed_seed = 2021
 tf.keras.utils.set_random_seed(fixed_seed)
 
+
+def save_improvement_data(txt_outfile,bg_eff, sig_eff_reco, sig_eff_corr):
+    with open(txt_outfile, "w") as f:
+        for b_e,s_e,s_e_corr in zip(bg_eff,sig_eff_reco,sig_eff_corr):
+            summary =f"@ BG eff {b_e:.5f} :  Sig Eff RECO {s_e:.5f}, Sig Eff CORR {s_e_corr:.5f}, improvement in %: {(s_e_corr/s_e-1.)*100.:.2f}"
+            print(summary, file=f)
+            print(summary)
+
+
+
 def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',log_features=[],training_dir='',loss_function='',inclusive_thresholds=[],plot_dir='',use_generator=''):
     """
     Plots resolutions, rates, efficiencies for a given training 
@@ -36,14 +46,14 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
         use_generator: bool, whether to use data generator or not
     """
     with h5py.File(data_file,'r') as open_file :
-        reco_data = np.array(open_file['smeared_data'])
-        reco_met = np.array(open_file['smeared_met'])
-        reco_ht = np.array(open_file['smeared_ht'])
-        true_data = np.array(open_file['true_data'])
-        true_met = np.array(open_file['true_met'])
-        original_met = np.array(open_file['original_met'])
-        true_ht = np.array(open_file['true_ht'])
-        ids = np.array(open_file['ids'])
+        reco_data = np.array(open_file['smeared_data'])[:3000000]
+        reco_met = np.array(open_file['smeared_met'])[:3000000]
+        reco_ht = np.array(open_file['smeared_ht'])[:3000000]
+        true_data = np.array(open_file['true_data'])[:3000000]
+        true_met = np.array(open_file['true_met'])[:3000000]
+        original_met = np.array(open_file['original_met'])[:3000000]
+        true_ht = np.array(open_file['true_ht'])[:3000000]
+        ids = np.array(open_file['ids'])[:3000000]
         ids_names = np.array(open_file['ids_names'])
 
     ids_names_dict = data_proc.get_process_id_dict(ids_names)
@@ -61,19 +71,19 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
 
     num_filters = 1
     graph_conv_filters = graph_data.adjacency
-    graph_conv_filters = K.constant(graph_conv_filters)
     custom_objects = {loss_function.__name__:loss_function,
                     "MseThesholdMetric":nn_losses.MseThesholdMetric}
     model = keras.models.load_model(training_dir+'/best_model',custom_objects = custom_objects)
 
     if use_generator:
         print('using generator')
-        data_generator = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)),
-                                                    output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
-                                                                        tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
-                                                                        tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
-                                                                        tf.TensorSpec(shape=(None,2), dtype=tf.float32))
-                    )
+        data_generator = data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)
+        #data_generator = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)),
+        #                                            output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
+        #                                                                tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
+        #                                                                tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
+        #                                                                tf.TensorSpec(shape=(None,2), dtype=tf.float32))
+        #            )
         dnn_correction = model.predict(data_generator)
     else :
         dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
@@ -186,6 +196,10 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
         plotting.plot_trigger_roc([bg_efficiencies,bg_efficiencies],[sig_eff_reco,sig_eff_corr],
                             ['Baseline','Corrected'],xtitle='Background Efficiency',ytitle='Signal Efficiency',title=f'Signal - {proc_sig}, Background - {bg_names_title}',semilogy=True, semilogx=True,
                             output_dir=plot_subdir,plot_name=f'plot_ROC_{proc_sig}_{var_name}.pdf',thresholds=bg_eff_thresholds)
+
+        txt_outfile = plot_subdir+f'/improvement_summary_{proc_sig}.txt'
+        save_improvement_data(txt_outfile,bg_efficiencies, sig_eff_reco, sig_eff_corr)
+
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

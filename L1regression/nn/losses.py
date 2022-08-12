@@ -3,25 +3,23 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 
-def gaus(x,a,mu,sigma):
-    return a*tf.math.exp(-(x-mu)**2/(2*sigma**2))
-def gaus_2(x,a,mu,sigma):
-    return tf.math.minimum(1./gaus(x,a,mu,sigma),100.)
-
-
 def mse(y_true,y_pred):
     return K.mean( K.square(y_true[:,0] - y_pred[:,0]) )
 
+def msle(y_true,y_pred):
+    def mse_local(y_true,y_pred):
+        return K.mean( K.square(y_true - y_pred) )
+    return K.sqrt(mse_local(K.log(y_pred[:,0] + 1), K.log(y_true[:,0] + 1)))
 
 def mae(y_true,y_pred):
     return K.mean( K.abs(y_true[:,0] - y_pred[:,0]))
 
+def mape(y_true, y_pred):
+    return K.mean( K.abs(y_true[:,0] - y_pred[:,0]) / K.clip(K.abs(y_true[:,0]),K.epsilon(),None))
 
-def mse_weighted(y_true,y_pred):
-    diff = K.abs(y_true[:,0]-1.)
-    #weights = tf.where(tf.math.greater_equal(diff,0.5), diff*100.,1.)
-    weights = gaus_2(y_true[:,0],1.55563209, 1.11240506, 0.24694669)
-    return K.mean( K.square(y_true[:,0] - y_pred[:,0]) * weights )
+
+
+
 
 class QuantileLoss(object):
     'Quantile Loss '
@@ -103,7 +101,8 @@ def get_loss_func(str_name):
     loss_dictionary = {
         'mse':mse,
         'mae':mae,
-        'mse_weighted':mse_weighted,
+        'mape':mape,
+        'msle':msle
     }
     if str_name in loss_dictionary.keys():
         return loss_dictionary[str_name]

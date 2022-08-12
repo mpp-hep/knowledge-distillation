@@ -22,7 +22,7 @@ tf.keras.utils.set_random_seed(fixed_seed)
 
 def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_function='',metric_thresholds='',
                             test_split=0.2,batch_size=1024,max_epochs=1,hyperband_factor=3,
-                            output_dir='',use_generator=''):
+                            output_dir='',use_generator='',max_events=''):
     """
     Performs optimization of the teacher model
     Arguments:
@@ -37,20 +37,22 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         hyperband_factor: int, hyperband_factor
         output_dir: str, output directory
         use_generator: bool, whether to use data generator or not
+        max_events : int, max events to read (-1 : all)
     """
     tracking_address = output_dir+'/tb_logs' 
     with h5py.File(data_file,'r') as open_file :
-        reco_data = np.array(open_file['smeared_data'])
-        reco_met = np.array(open_file['smeared_met'])
-        reco_ht = np.array(open_file['smeared_ht'])
-        true_data = np.array(open_file['true_data'])
-        true_met = np.array(open_file['true_met'])
-        original_met = np.array(open_file['original_met'])
-        true_ht = np.array(open_file['true_ht'])
         ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
-
-
+        mask = ids>=0
+        reco_data = np.array(open_file['smeared_data'])[mask]
+        reco_met = np.array(open_file['smeared_met'])[mask]
+        reco_ht = np.array(open_file['smeared_ht'])[mask]
+        true_data = np.array(open_file['true_data'])[mask]
+        true_met = np.array(open_file['true_met'])[mask]
+        original_met = np.array(open_file['original_met'])[mask]
+        true_ht = np.array(open_file['true_ht'])[mask]
+        ids = np.array(open_file['ids'])[mask]
+    
     emb_input_size = len(np.unique(reco_data[data_proc.idx_feature_for_met['pid']]))
     embedding_idx = data_proc.idx_feature_for_met['pid']
     if variable=='original_met':
@@ -63,32 +65,38 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         graph_data = data_proc.HTGraphCreator(reco_data,reco_ht,true_ht,ids,log_features=log_features)
 
 
-    #graph_data.apply_mask_on_graph(graph_data.true_met>70)
-    graph_data.apply_mask_on_graph(graph_data.process_ids==400)
-
+    graph_data.features, graph_data.adjacency,  graph_data.labels, graph_data.process_ids = graph_data.apply_mask_on_graph(graph_data.process_ids<2)
+    
     num_filters=1
     graph_conv_filters = graph_data.adjacency
-    graph_conv_filters = K.constant(graph_conv_filters)
 
     #split the data in train and test:
+    n_events = min(max_events, len(graph_data.features)) if max_events>0 else len(graph_data.features)
     indices = list(range(len(graph_data.features)))
     random.shuffle(indices)
-    train_test_idx_split = int(len(indices)*test_split)
+    train_test_idx_split = int(len(graph_data.features)*test_split)
     val_indices = np.ones(len(indices), dtype=bool)
     val_indices[train_test_idx_split:] = False
     train_indices = np.ones(len(indices), dtype=bool)
     train_indices[:train_test_idx_split] = False
+    train_indices[train_test_idx_split+int(n_events*(1-test_split)):] = False
     if use_generator:
-        train_dataset = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features[train_indices], 
-                                                                                                            graph_data.adjacency[train_indices],
-                                                                                                            graph_conv_filters[train_indices],
-                                                                                                            graph_data.labels[train_indices], 
-                                                                                                            batch_size=batch_size)),
-                                                        output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
-                                                        tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
-                                                        tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
-                                                        tf.TensorSpec(shape=(None,2), dtype=tf.float32))
-                                                        ).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        train_dataset = data_proc.DataGenerator(graph_data.features[train_indices], 
+                                                graph_data.adjacency[train_indices],
+                                                graph_conv_filters[train_indices],
+                                                graph_data.labels[train_indices], 
+                                                batch_size=batch_size,
+                                                shuffle=True)
+       #train_dataset = tf.data.Dataset.from_generator(data_proc.make_gen_callable(data_proc.DataGenerator(graph_data.features[train_indices], 
+       #                                                                                                     graph_data.adjacency[train_indices],
+       #                                                                                                     graph_conv_filters[train_indices],
+       #                                                                                                     graph_data.labels[train_indices], 
+       #                                                                                                     batch_size=batch_size)),
+       #                                                 output_signature=((tf.TensorSpec(shape=( None,graph_data.features.shape[1],graph_data.features.shape[2]), dtype=tf.float32),
+       #                                                 tf.TensorSpec(shape=( None,graph_data.adjacency.shape[1],graph_data.adjacency.shape[2]), dtype=tf.float32),
+       #                                                 tf.TensorSpec(shape=( None,graph_conv_filters.shape[1],graph_conv_filters.shape[2]), dtype=tf.float32)),
+       #                                                 tf.TensorSpec(shape=(None,2), dtype=tf.float32))
+       #                                                 ).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     else :
         train_dataset = ([graph_data.features[train_indices], graph_data.adjacency[train_indices],graph_conv_filters[train_indices]],graph_data.labels[train_indices])
@@ -113,6 +121,7 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
                      max_epochs = max_epochs,
                      factor=hyperband_factor,
                      hyperband_iterations=1, #this should be as large as computationally possible. Default=1
+                   ### overwrite=False,
                      seed=fixed_seed,
                      directory=output_dir,
                      project_name='hyperband_tuner')
@@ -131,28 +140,32 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
         ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=2, verbose=1, min_lr=1e-9),
         TensorBoard(log_dir=tracking_address, histogram_freq=1),
     ]
-    tuner.search(train_dataset,
-             validation_data = val_dataset,
-             epochs=max_epochs,
-             batch_size=batch_size,
-             shuffle=False,
-             callbacks=callbacks,
-             use_multiprocessing=True,
-             workers=3)
+
+    fit_dict = {'validation_data' : val_dataset,
+             'batch_size' :batch_size,
+             'shuffle' :False,
+             'epochs':max_epochs,
+             'callbacks' :callbacks,
+             'use_multiprocessing' :False,
+            # 'workers' :3
+             }
+
+    if use_generator : 
+        tuner.search(train_dataset,**fit_dict) 
+    else:
+        tuner.search(train_dataset[0],train_dataset[1],**fit_dict) 
 
     tuner.results_summary()
 
     best_model = tuner.get_best_models()[0]
     best_model.build(graph_data.features.shape[1:])
     best_model.summary()
-    best_model.fit(train_dataset,
-             validation_data = val_dataset,
-             epochs=max_epochs,
-             batch_size=batch_size, 
-             shuffle=False,
-             callbacks=callbacks,
-             use_multiprocessing=True,
-             workers=3)
+    
+    if use_generator : 
+        best_model.fit(train_dataset,**fit_dict) 
+    else:
+        best_model.fit(train_dataset[0],train_dataset[1],**fit_dict) 
+
     best_model.save(output_dir+'/best_model')
     
 
@@ -169,6 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_epochs', type=int, default = 50, help='Max epochs')
     parser.add_argument('--hyperband_factor', type=int, default = 3, help='Hyperband factor')
     parser.add_argument('--use_generator', type=int, default=0, help='True/False to use generator')
+    parser.add_argument('--max_events', type=int, default = -1, help='Max events to train on')
 
     args = parser.parse_args()
     args.loss_function = nn_losses.get_loss_func(args.loss_function)

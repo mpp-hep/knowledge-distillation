@@ -70,15 +70,18 @@ def main_selective_sampling_jets(data_file='',fractions_to_keep=[1.], mode="==",
     """
 
     with h5py.File(data_file,'r') as open_file :
-        reco_data = np.array(open_file['smeared_data'])
-        reco_met = np.array(open_file['smeared_met'])
-        reco_ht = np.array(open_file['smeared_ht'])
-        true_data = np.array(open_file['true_data'])
-        true_met = np.array(open_file['true_met'])
-        true_ht = np.array(open_file['true_ht'])
-        original_met = np.array(open_file['original_met'])
         ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
+
+        mask = ids>=0 #(ids==400)|(ids==1)
+        reco_data = np.array(open_file['smeared_data'])[mask]
+        reco_met = np.array(open_file['smeared_met'])[mask]
+        reco_ht = np.array(open_file['smeared_ht'])[mask]
+        true_data = np.array(open_file['true_data'])[mask]
+        true_met = np.array(open_file['true_met'])[mask]
+        true_ht = np.array(open_file['true_ht'])[mask]
+        original_met = np.array(open_file['original_met'])[mask]
+        ids = np.array(open_file['ids'])[mask]
 
     idx_jet = idx_particle_type['jet']
     pt_idx = int(idx_feature['pt'])

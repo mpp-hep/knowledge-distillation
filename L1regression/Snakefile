@@ -31,11 +31,11 @@ rule selective_sampling_jets:
     params:
         fractions_to_keep = '"0."',
         mode = '"=="',
-        sampling_threshold = 180, #met 180, ht 400, true_ht_over_reco_ht = 2
+        sampling_threshold = 110, #met 180, ht 400, true_ht_over_reco_ht = 2
         txt_outfile = 'output/jet_summary_stat_{sampling_var}.txt',
     output:
-        outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
-        outfile_discarded = 'output/l1_regression_train_discarded_{sampling_var}.h5',
+        outfile = 'output/l1_regression_train_selective_qcd_htautau_{sampling_var}.h5',
+        outfile_discarded = 'output/l1_regression_train_discarded_qcd_htautau_{sampling_var}.h5',
         plots = directory('plots_selective_{sampling_var}/')
     shell:
         'mkdir -p {output.plots};'
@@ -62,9 +62,10 @@ rule optimize_l1_teacher:
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
-        use_generator = 1
+        use_generator = 0,
+        max_events=1000000
     output:
-        output_dir = directory('output_w_sig_htautau_optimize_{variable}/'),
+        output_dir = directory('output_w_sig_no_w_{variable}/'),
     shell:
         'python optimize_l1_teacher.py --data_file {input.data_file} \
                                       --variable {wildcards.variable}\
@@ -76,6 +77,7 @@ rule optimize_l1_teacher:
                                       --max_epochs {params.max_epochs}\
                                       --hyperband_factor {params.hyperband_factor}\
                                       --output_dir {output.output_dir}\
+                                      --max_events {params.max_events}\
                                       --use_generator {params.use_generator}'
 
                                       
@@ -88,9 +90,10 @@ rule analyze_results:
         loss_function = rules.optimize_l1_teacher.params.loss_function,
         inclusive_thresholds = "'100,120,150'", #100,120,150 for met; 200,320,450 for HT
         training_dir=rules.optimize_l1_teacher.output.output_dir,
-        use_generator = 0
+        use_generator = 0,
+        signal_names = "'W,hChToTauNu,hToTauTau'"  #W,hChToTauNu,hToTauTau
     output:
-        plots = directory('plots_output_w_sig_htautau_{variable}/'),
+        plots = directory('plots_output_w_sig_no_w_train_max_{variable}/'),
     shell:
         'mkdir -p {output.plots};'
         'python analyze_results_met.py --data_file {input.data_file} \
@@ -100,5 +103,6 @@ rule analyze_results:
                                       --log_features {params.log_features}\
                                       --inclusive_thresholds {params.inclusive_thresholds}\
                                       --plot_dir {output.plots}\
+                                      --signal_names {params.signal_names}\
                                       --use_generator {params.use_generator};'
         'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'

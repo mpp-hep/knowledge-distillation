@@ -116,14 +116,9 @@ class METGraphCreator:
     def prepare_true_labels(self):
         self.labels =  self.true_met/self.reco_met
         self.labels = np.concatenate([self.labels.reshape(-1,1),self.features[:,0,idx_feature_for_met['met']].reshape(-1,1)],axis=1)
-
+        
     def apply_mask_on_graph(self,mask):
-        self.reco_data = self.reco_data[mask]
-        self.reco_met = self.reco_met[mask]
-        self.reco_ht = self.reco_ht[mask]
-        self.true_met = self.true_met[mask]
-        self.true_ht = self.true_ht[mask]
-        self.process_ids = self.process_ids[mask]
+        return self.features[mask], self.adjacency[mask], self.labels[mask], self.process_ids[mask]
 
     
 
@@ -167,7 +162,7 @@ class HTGraphCreator:
         self.labels = np.concatenate([self.labels.reshape(-1,1),self.features[:,0,idx_feature_for_ht['ht']].reshape(-1,1)],axis=1)
 
     def apply_mask_on_graph(self,mask):
-        return self.features[mask], self.adjacency[mask], self.labels[mask]
+        return self.features[mask], self.adjacency[mask], self.labels[mask], self.process_ids[mask]
 
 
 
@@ -175,12 +170,11 @@ class HTGraphCreator:
 class DataGenerator(keras.utils.Sequence):
     'Data Generator for keras '
     def __init__(self, features, adjacency,graph_conv_filters,labels, batch_size,shuffle=True):
-        #would shuffle here be multiprocessing unsafe? even if this is done in the init
         self.features, self.adjacency, self.graph_conv_filters = features, adjacency,graph_conv_filters
         self.labels = labels
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.indices = range(len(self.features))
+        self.indices = np.arange(len(self.features))
         self.num_batches = len(self.indices) // self.batch_size
         self.last_batch = len(self.indices) % self.batch_size
 
@@ -190,7 +184,8 @@ class DataGenerator(keras.utils.Sequence):
     def __getitem__(self, idx):
         end = min(len(self.indices), (idx + 1)*self.batch_size)
         indices_to_yiled = self.indices[idx*self.batch_size:end]
-        return (np.take(self.features,indices_to_yiled,axis=0),np.take(self.adjacency,indices_to_yiled,axis=0),np.take(self.graph_conv_filters,indices_to_yiled,axis=0)),np.take(self.labels,indices_to_yiled,axis=0)
+        X_batch, y_batch =  (self.features[indices_to_yiled],self.adjacency[indices_to_yiled],K.constant(self.graph_conv_filters[indices_to_yiled])),self.labels[indices_to_yiled]
+        return X_batch, y_batch
 
     def on_epoch_end(self):
         if self.shuffle:
