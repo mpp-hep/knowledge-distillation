@@ -1,5 +1,5 @@
 dataset: '/eos/cms/store/cmst3/user/egovorko/kd_output/data_-1.pickle'
 
-jet_corr_dir: '/afs/cern.ch/user/n/nchernya/public/kd_public/JES_corrections/'
+jet_corr_dir: '/eos/project/d/dshep/TOPCLASS/L1jetLepData/L1_met_ht_regression/JES_corrections/'
 jet_pt_filename: 'jets_eta_for'
 jet_eta_filename: 'JER_eta' 

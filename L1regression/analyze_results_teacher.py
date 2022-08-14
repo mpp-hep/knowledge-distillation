@@ -80,7 +80,7 @@ def main_analyze_results(data_file='',signal_names='',bg_names='',variable='',lo
         data_generator = data_proc.DataGenerator(graph_data.features, graph_data.adjacency,graph_conv_filters,graph_data.labels, batch_size=2048, shuffle=False)
         dnn_correction = model.predict(data_generator)
     else :
-        dnn_correction = model.predict([graph_data.features, graph_data.adjacency,graph_conv_filters],batch_size=2048)
+        dnn_correction = model.predict([graph_data.features, graph_data.adjacency,K.constant(graph_conv_filters)],batch_size=2048)
 
     if not os.path.exists(plot_dir):
         os.makedirs(plot_dir) 

@@ -35,8 +35,8 @@ rule selective_sampling_jets:
         sampling_threshold = 110, #met around(~) 110-180, ht ~400, true_ht_over_reco_ht = ~2
         txt_outfile = 'output/jet_summary_stat_{sampling_var}.txt',
     output:
-        outfile = 'output/l1_regression_train_selective_qcd_htautau_{sampling_var}.h5',
-        outfile_discarded = 'output/l1_regression_train_discarded_qcd_htautau_{sampling_var}.h5',
+        outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
+        outfile_discarded = 'output/l1_regression_train_discarded_{sampling_var}.h5',
         plots = directory('plots_selective_{sampling_var}/')
     shell:
         'mkdir -p {output.plots};'
@@ -55,17 +55,17 @@ rule selective_sampling_jets:
 
 rule optimize_l1_teacher:
     input:
-        data_file = 'output/l1_regression_w_sig_train.h5' #output/l1_regression_train_selective_{variable}.h5 rules.selective_sampling_jets_met.output.outfile,
+        data_file = 'output/l1_regression_w_sig_train.h5' 
     params:
         log_features = "''",#'"pt,met"',
         loss_function = '"huber_1.0"',
-        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met in GeV, and if log is applied in log_features, it has to be different numbers (~2-3)
+        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met in GeV, and if log is applied in log_features, it has to be different numbers (~5)
         test_split = 0.2,
         batch_size = 1024,
         max_epochs = 50,   
         hyperband_factor=3,
         use_generator = 0,
-        max_events=1000000 #-1
+        max_events=1000000 #-1 will process all events
     output:
         output_dir = directory('output_w_sig_no_w_{variable}/'),
     shell:
@@ -86,7 +86,7 @@ rule optimize_l1_teacher:
 
 rule analyze_results:
     input:
-        data_file = 'output/l1_regression_w_sig_test.h5' #'output/l1_regression_train_selective_true_ht_over_reco_ht.h5' #'output/l1_regression_train_selective_{variable}.h5'
+        data_file = 'output/l1_regression_w_sig_test.h5' 
     params:
         log_features = rules.optimize_l1_teacher.params.log_features,
         loss_function = rules.optimize_l1_teacher.params.loss_function,
@@ -98,7 +98,7 @@ rule analyze_results:
         plots = directory('plots_output_w_sig_no_w_train_max_{variable}/'),
     shell:
         'mkdir -p {output.plots};'
-        'python analyze_results_met.py --data_file {input.data_file} \
+        'python analyze_results_teacher.py --data_file {input.data_file} \
                                       --loss_function {params.loss_function}\
                                       --variable {wildcards.variable}\
                                       --training_dir {params.training_dir}\
@@ -107,4 +107,3 @@ rule analyze_results:
                                       --plot_dir {output.plots}\
                                       --signal_names {params.signal_names}\
                                       --use_generator {params.use_generator};'
-      #  'cp -r {output.plots} /afs/cern.ch/user/n/nchernya/www/ML4HEP/knowledge_distillation/L1/'

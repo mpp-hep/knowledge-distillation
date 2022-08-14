@@ -23,7 +23,7 @@ def mape(y_true, y_pred):
 
 class QuantileLoss(object):
     'Quantile Loss '
-    def __init__(self,taus=[0.5,0.25,0.75],weights=[1.,1.2,0.9]):
+    def __init__(self,taus=[0.5],weights=[1.]):
         if isinstance(taus, float):
             taus = np.array([taus]) 
             weights = np.array([1.]) 

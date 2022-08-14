@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil 
 from utils.data_processing import idx_particle_type,idx_feature
+import utils.data_processing  as data_proc
 matplotlib.use("Agg") 
 import mplhep as hep
 hep.style.use(hep.style.CMS) 
@@ -77,7 +78,7 @@ def main_selective_sampling_jets(data_file='',proc_names='',fractions_to_keep=[1
 
         proc_selection_str = ''
         for proc in proc_names:
-            proc_selection_str+='(ids==%f)|'%ids_names_dict[bg]
+            proc_selection_str+='(ids==%f)|'%ids_names_dict[proc]
         proc_selection_str=proc_selection_str[:-1] # remove the last "|"
         mask = np.where(eval(proc_selection_str))
         
@@ -100,9 +101,9 @@ def main_selective_sampling_jets(data_file='',proc_names='',fractions_to_keep=[1
     sampling_var_dict['true_met'] = true_met
     sampling_var_dict['original_met'] = original_met
     sampling_var_dict['true_ht'] = true_ht
-    sampling_var_dict['true_ht_over_reco_ht'] = true_ht/reco_ht
-    sampling_var_dict['true_met_over_reco_met'] = true_met/reco_met
-    sampling_var_dict['original_met_over_reco_met'] = original_met/reco_met
+    sampling_var_dict['true_ht_over_reco_ht'] = np.where(reco_ht!=0,true_ht/reco_ht,0.)
+    sampling_var_dict['true_met_over_reco_met'] = np.where(reco_met!=0,true_met/reco_met,0.)
+    sampling_var_dict['original_met_over_reco_met'] = np.where(reco_met!=0,original_met/reco_met,0.)
     if sampling_var in list(sampling_var_dict.keys()):
         max_var = np.max(sampling_var_dict[sampling_var][indecies_to_train])
         values, bins = np.histogram(sampling_var_dict[sampling_var][indecies_to_train],bins=np.linspace(0,max_var,200))
@@ -145,7 +146,7 @@ def main_selective_sampling_jets(data_file='',proc_names='',fractions_to_keep=[1
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_file', type=str, help='Where is the data')
-    parser.add_argument('--fractions_to_keep', type=str, default='0.', help='Fractions of jets to keep, starting from 0 jets')
+    parser.add_argument('--fractions_to_keep', type=str, default='0.', help='Commma-separated fractions of jets to keep, starting from 0 jets and increasing by 1 jets : e.g. 0,0.5 will remove all events with 0 jets, and keep 50 percent of events with 1 jet')
     parser.add_argument('--mode', type=str, default='==',help='Mode for jets selection : == or >=')
     parser.add_argument('--sampling_var', type=str, default='', help='Variable to apply sampling on (true/original MET or HT)')
     parser.add_argument('--sampling_threshold', type=float, default=180, help='MET or HT value threshold for sampling')

@@ -9,8 +9,8 @@ import tensorflow
 from tensorflow import keras
 import tensorflow.keras.backend as K
 
-
-
+fixed_seed = 2021
+random.seed(fixed_seed)
 array32 = partial(np.array, dtype=np.float32)
 
 idx_jet_0=8

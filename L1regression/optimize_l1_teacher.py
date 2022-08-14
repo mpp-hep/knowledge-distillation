@@ -17,6 +17,7 @@ from nn.models import GraphAttentionHyperModel
 import nn.losses as nn_losses
 
 fixed_seed = 2021
+random.seed(fixed_seed)
 tf.keras.utils.set_random_seed(fixed_seed)
 
 
@@ -43,14 +44,22 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     with h5py.File(data_file,'r') as open_file :
         ids = np.array(open_file['ids'])
         ids_names = np.array(open_file['ids_names'])
-        reco_data = np.array(open_file['smeared_data'])
-        reco_met = np.array(open_file['smeared_met'])
-        reco_ht = np.array(open_file['smeared_ht'])
-        true_data = np.array(open_file['true_data'])
-        true_met = np.array(open_file['true_met'])
-        original_met = np.array(open_file['original_met'])
-        true_ht = np.array(open_file['true_ht'])
-        #ids = np.array(open_file['ids'])
+        n_events = min(max_events, len(ids)) if max_events>0 else len(ids)
+        if n_events<len(ids):
+            #take a smaller random subset of the data
+            indices = list(range(len(ids)))
+            random.shuffle(indices) 
+            keep_mask = indices[:n_events]
+        else:
+            keep_mask = np.ones(len(ids),dtype=bool)
+        reco_data = np.array(open_file['smeared_data'])[keep_mask]
+        reco_met = np.array(open_file['smeared_met'])[keep_mask]
+        reco_ht = np.array(open_file['smeared_ht'])[keep_mask]
+        true_data = np.array(open_file['true_data'])[keep_mask]
+        true_met = np.array(open_file['true_met'])[keep_mask]
+        original_met = np.array(open_file['original_met'])[keep_mask]
+        true_ht = np.array(open_file['true_ht'])[keep_mask]
+        ids = np.array(open_file['ids'])[keep_mask]
     
     emb_input_size = len(np.unique(reco_data[data_proc.idx_feature_for_met['pid']]))
     embedding_idx = data_proc.idx_feature_for_met['pid']
@@ -67,15 +76,14 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
     graph_conv_filters = graph_data.adjacency
 
     #split the data in train and test:
-    n_events = min(max_events, len(graph_data.features)) if max_events>0 else len(graph_data.features)
-    indices = list(range(len(graph_data.features)))
+    indices = np.arange(len(graph_data.features))
     random.shuffle(indices)
     train_test_idx_split = int(len(graph_data.features)*test_split)
     val_indices = np.ones(len(indices), dtype=bool)
-    val_indices[train_test_idx_split:] = False
+    val_indices[indices[train_test_idx_split:]] = False
     train_indices = np.ones(len(indices), dtype=bool)
-    train_indices[:train_test_idx_split] = False
-    train_indices[train_test_idx_split+int(n_events*(1-test_split)):] = False
+    train_indices[indices[:train_test_idx_split]] = False
+    train_indices[indices[train_test_idx_split+int(n_events*(1-test_split)):]] = False
     if use_generator:
         train_dataset = data_proc.DataGenerator(graph_data.features[train_indices], 
                                                 graph_data.adjacency[train_indices],
@@ -84,9 +92,9 @@ def main_optimize_l1_teacher(data_file='',variable='',log_features=[''], loss_fu
                                                 batch_size=batch_size,
                                                 shuffle=True)
     else :
-        train_dataset = ([graph_data.features[train_indices], graph_data.adjacency[train_indices],graph_conv_filters[train_indices]],graph_data.labels[train_indices])
+        train_dataset = ([graph_data.features[train_indices], graph_data.adjacency[train_indices],K.constant(graph_conv_filters[train_indices])],graph_data.labels[train_indices])
     #Validation data always fits in the memory. Otherwise, change to generator as well
-    val_dataset = ([graph_data.features[val_indices], graph_data.adjacency[val_indices],graph_conv_filters[val_indices]],graph_data.labels[val_indices])
+    val_dataset = ([graph_data.features[val_indices], graph_data.adjacency[val_indices],K.constant(graph_conv_filters[val_indices])],graph_data.labels[val_indices])
 
 
     hp = keras_tuner.HyperParameters()
