@@ -2,7 +2,7 @@
 This part is dedicated to study of knowledge distillation techniques on the problem of L1 regression (MET or HT)
 
 ## Requirements 
- -  Execute cern lcg stack to set up the environment properly:
+ -  Execute CERN LCG stack to set up the environment properly, and you might also want to set PATH to your local PATH:
  ```
  source /cvmfs/sft.cern.ch/lcg/views/LCG_102cuda/x86_64-centos7-gcc8-opt/setup.sh ; 
  export PATH=/afs/cern.ch/user/X/X_USER/.local/bin:$PATH
