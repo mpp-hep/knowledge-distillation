@@ -58,10 +58,14 @@ will run the rule 'selective_sampling_jets' with wildcard being 'true_met'
 
 ### Creating dataset : 
 
-Typically you do not need to change anything in the script 'create_L1regression_data.py'. 
+Normally, you do not need to change anything in the script 'create_L1regression_data.py'. 
 This script prepares the data where objects are smeared (smeared_data, smeared_met, smeared_ht, or true_..). 
 There is also 'original_met' that is there if we want to really regress to more process dependent MET, but we do not want that as
-this would make out trigger biases. So you can safely ignore it, and only work with smeared and true values.
+this would make our trigger biased. So you can safely ignore it, and only work with smeared and true values.
+If when you try to create the dataset, you run out of memory because the RAM on your machine is small, you can use the prepared datasets available at:
+```
+TODO : PUT DATASETS
+```
 
 All information related to the indexing of the new dataset is stored in utils/data_processing.py 
 
@@ -75,27 +79,45 @@ Additional selections might be needed for your training dataset, the code select
  Such procedure might be needed if the spectrum is very unbalanced, and during the trainig only the information from this over represented part of the dataset are being learned. 
 Any or all of these options can be applied in one go, but they will be processed in the same order as defined above.
  
+Most likely, in the end, we will train regression on QCD only, and evaluate its performance on W as signal and QCD as background. 
  
 ### Training a regression :
 
 In principle, the code is set up to train either MET regression or HT regression.
 
 - MET regression : use all objects in the event (mu, e/g, jets) with their pt,eta,phi and their PID (partcle id), smeared MET, smeared HT, and regress to MET_true/MET_reco, that will serve as the MET correction for the final MET trigger. Data preparation is done in the class METGraphCreator (utils/data_processing.py)
-- HT regression : do the same, but train on jets only with their pt,eta,phi + smeared HT, to regress to HT_true/HT_reco.  Data preparation is done in the class HTGraphCreator (utils/data_processing.py), which additionally keeps only jets. 
+- HT regression : do the same, but train on jets only with their pt,eta,phi + smeared HT, to regress to HT_true/HT_reco.  Data preparation is done in the class HTGraphCreator (utils/data_processing.py), which additionally keeps only jets, removing other objects.
 
+These Graph creators will produce graph_features, graph_adjacency, and graph_labels. The graph_labels have two components, the first is the regression target, and the second is the true variable of interest (true_MET or true_HT) which is used to condition other metrics for monitoring the performance of the training (see below).
+ 
+You might want to do some preprocessing of your input data before the training. Currently, only log transformation is available, you can can pass comma separate names of the features that you would like to apply a transformation on as --log_features = 'pt,met'. 
 
 For the knowledge distillation we decided to do MET regression, so your variable of interest (--variable) is met, not ht. But again, the code is set up such that you can also run everything for HT regression. Appropriate data handling classes (METGraphCreator or HTGraphCreator) are picked up by the code.
 
-The teacher model is a graph convolutional neural network with attention defined in nn/models.py. If MET regression is used, the PID of the objects has to be embedded. Again, this embedding layer is added automatically to the model, if variable of interest (--variable) is met.
+
+### Teacher model 
+
+The teacher model is a graph convolutional neural network with attention defined in nn/models.py. It is built using layers from the keras_deep_learning library (keras_dgl), that you already installed from Nadya's master repo. If MET regression is used, the PID of the objects has to be embedded. This embedding layer is added automatically to the model, if variable of interest (--variable) is met.
 
 The teacher model is set up as a HyperModel from keras hyper tuner, so the hyperparameters of the model can be optimized 
-(this will be done once, and these parameters will be fixed to these optimized values through out all knowledge distillation studies)
+(this will be done once, and these parameters will be fixed to these optimized values through out all knowledge distillation studies). I am using HyperBand algortihm to do the teacher optimization.
 
-If you want to train on full dataset and it does not fit in the memory, use the option --use_generator=1. 
+You can specify loss function that you would like to use, currently the following loss functions are supported : mse, mae, mape, msle, huber_delta, quantile_tau, dice_epsilon.  #TODO fix quantile loss. You can experiment with those, but in general 'huber_1.0' shows good results. Pay attention, that loss functions are implemented in nn/losses.py. Since we have two components in the true_labels, where we are using only the [0] component as a target, we need to re-implement even keras-available losses such as mse.
+
+Additionally, you can add monitoring of theresholded MSE metrics. Class MseThesholdMetric implements calculation of MSE for data that passes variable>threshold. If you train MET regression, MET>threshold, if you train HT regression, then HT>threshold. E.g. --metric_thresholds=100,150 will monitor MSE(target,prediction) for MET/HT>100 and >150. Keep in mind that if you applied log tranformation on met/ht, you will need to reduce these number to log(100+1)/log(150+1). Having these metrics is nice way to monitor that your regression performance improves in all phase space as the training progresses. This is the reason, we need to have a second component of the graph labels passed to the training. 
+
+If you want to train on full dataset and it does not fit in the memory, use the option --use_generator=1. Currently, the generator is written such that graph features, and adjacency matrix are loaded in the RAM, and then the generator only puts a generator batch on the GPU instead of loading a full dataset on the GPU. The full training file has about 5M events. When building an adjacency matrix for MET training, a matrix of 5Mx18x18 is created, and typically this matrix in float32 fits in the RAM (64Gb, maybe even 32Gb).
+However, if you have a machine with small RAM (e.g. 16Gb), you will not be able to create such matrix and in this case a generator will have to be rewritten to create adjecency matrix on the fly which of course will be slower. To start with, you can only take a smaller <ins>random</ins> subset of the data in .h5 files by specifying --max_events. TODO update the usage of max_events
+
 
 ### Evaluating the performance :
-All results are analyzed in analyze_results_met.py
 
+To evaluate the performance, use the script analyze_results_teacher.py. #TODO rename the script to analyze_results_teacher.py
+It will produce turn-on curves, resolution plots, distibutions of target and prediction, and MET. It will also produce trigger rates and final ROC plot + .txt file with summary of signal efficiency improvement.  For turn-on curves, you specify --inclusive_thresholds that you want to produce turn-on curves for (e.g. MET : 100,120,150 GeV HT :  200,320,450 GeV).
+
+Make sure that when you evaluate the results, you use the same log-tranformation of the features (if any) as used for the training.
+
+You can specify --signal_names and --bg_names that you want to analyze the results for.
 
 
 
