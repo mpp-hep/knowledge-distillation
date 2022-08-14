@@ -1,7 +1,7 @@
 # Knowledge Distillation for L1 regression
 This part is dedicated to study of knowledge distillation techniques on the problem of L1 regression (MET or HT)
 
-## Requirements :
+## Requirements 
  -  Execute cern lcg stack to set up the environment properly:
  ```
  source /cvmfs/sft.cern.ch/lcg/views/LCG_102cuda/x86_64-centos7-gcc8-opt/setup.sh ; 
@@ -110,7 +110,7 @@ If you want to train on full dataset and it does not fit in the memory, use the 
 However, if you have a machine with small RAM (e.g. 16Gb), you will not be able to create such matrix and in this case a generator will have to be rewritten to create adjecency matrix on the fly which of course will be slower. To start with, you can only take a smaller <ins>random</ins> subset of the data in .h5 files by specifying --max_events. TODO update the usage of max_events
 
 
-### Evaluating the performance :
+### Evaluating the performance 
 
 To evaluate the performance, use the script analyze_results_teacher.py. #TODO rename the script to analyze_results_teacher.py
 It will produce turn-on curves, resolution plots, distibutions of target and prediction, and MET. It will also produce trigger rates and final ROC plot + .txt file with summary of signal efficiency improvement.  For turn-on curves, you specify --inclusive_thresholds that you want to produce turn-on curves for (e.g. MET : 100,120,150 GeV HT :  200,320,450 GeV).
