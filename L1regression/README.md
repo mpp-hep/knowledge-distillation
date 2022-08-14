@@ -56,7 +56,7 @@ will run the rule 'selective_sampling_jets' with wildcard being 'true_met'
 
 ## Running the code
 
-### Creating dataset : 
+### Creating dataset 
 
 Normally, you do not need to change anything in the script 'create_L1regression_data.py'. 
 This script prepares the data where objects are smeared (smeared_data, smeared_met, smeared_ht, or true_..). 
@@ -81,7 +81,7 @@ Any or all of these options can be applied in one go, but they will be processed
  
 Most likely, in the end, we will train regression on QCD only, and evaluate its performance on W as signal and QCD as background. 
  
-### Training a regression :
+### Training a regression 
 
 In principle, the code is set up to train either MET regression or HT regression.
 
