@@ -64,7 +64,8 @@ There is also 'original_met' that is there if we want to really regress to more 
 this would make our trigger biased. So you can safely ignore it, and only work with smeared and true values.
 If when you try to create the dataset, you run out of memory because the RAM on your machine is small, you can use the prepared datasets available at:
 ```
-TODO : PUT DATASETS
+/eos/project/d/dshep/TOPCLASS/L1jetLepData/L1_met_ht_regression/l1_regression_w_sig_train.h5
+/eos/project/d/dshep/TOPCLASS/L1jetLepData/L1_met_ht_regression/l1_regression_w_sig_test.h5
 ```
 
 All information related to the indexing of the new dataset is stored in utils/data_processing.py 
@@ -102,18 +103,17 @@ The teacher model is a graph convolutional neural network with attention defined
 The teacher model is set up as a HyperModel from keras hyper tuner, so the hyperparameters of the model can be optimized 
 (this will be done once, and these parameters will be fixed to these optimized values through out all knowledge distillation studies). I am using HyperBand algortihm to do the teacher optimization.
 
-You can specify loss function that you would like to use, currently the following loss functions are supported : mse, mae, mape, msle, huber_delta, quantile_tau, dice_epsilon.  #TODO fix quantile loss. You can experiment with those, but in general 'huber_1.0' shows good results. Pay attention, that loss functions are implemented in nn/losses.py. Since we have two components in the true_labels, where we are using only the [0] component as a target, we need to re-implement even keras-available losses such as mse.
+You can specify loss function that you would like to use, currently the following loss functions are supported : mse, mae, mape, msle, huber_delta, quantile_tau, dice_epsilon. You can experiment with those, but in general 'huber_1.0' shows good results. Pay attention, that loss functions are implemented in nn/losses.py. Since we have two components in the true_labels, where we are using only the [0] component as a target, we need to re-implement even keras-available losses such as mse.
 
 Additionally, you can add monitoring of theresholded MSE metrics. Class MseThesholdMetric implements calculation of MSE for data that passes variable>threshold. If you train MET regression, MET>threshold, if you train HT regression, then HT>threshold. E.g. --metric_thresholds=100,150 will monitor MSE(target,prediction) for MET/HT>100 and >150. Keep in mind that if you applied log tranformation on met/ht, you will need to reduce these number to log(100+1)/log(150+1). Having these metrics is nice way to monitor that your regression performance improves in all phase space as the training progresses. This is the reason, we need to have a second component of the graph labels passed to the training. 
 
 If you want to train on full dataset and it does not fit in the memory, use the option --use_generator=1. Currently, the generator is written such that graph features, and adjacency matrix are loaded in the RAM, and then the generator only puts a generator batch on the GPU instead of loading a full dataset on the GPU. The full training file has about 5M events. When building an adjacency matrix for MET training, a matrix of 5Mx18x18 is created, and typically this matrix in float32 fits in the RAM (64Gb, maybe even 32Gb).
-However, if you have a machine with small RAM (e.g. 16Gb), you will not be able to create such matrix and in this case a generator will have to be rewritten to create adjecency matrix on the fly which of course will be slower. To start with, you can only take a smaller <ins>random</ins> subset of the data in .h5 files by specifying --max_events. TODO update the usage of max_events
+However, if you have a machine with small RAM (e.g. 16Gb), you will not be able to create such matrix and in this case a generator will have to be rewritten to create adjecency matrix on the fly which of course will be slower. To start with, you can only take a smaller <ins>random</ins> subset of the data in .h5 files by specifying --max_events.
 
 
 ### Evaluating the performance 
 
-To evaluate the performance, use the script analyze_results_teacher.py. #TODO rename the script to analyze_results_teacher.py
-It will produce turn-on curves, resolution plots, distibutions of target and prediction, and MET. It will also produce trigger rates and final ROC plot + .txt file with summary of signal efficiency improvement.  For turn-on curves, you specify --inclusive_thresholds that you want to produce turn-on curves for (e.g. MET : 100,120,150 GeV HT :  200,320,450 GeV).
+To evaluate the performance, use the script analyze_results_teacher.py. It will produce turn-on curves, resolution plots, distibutions of target and prediction, and MET. It will also produce trigger rates and final ROC plot + .txt file with summary of signal efficiency improvement.  For turn-on curves, you specify --inclusive_thresholds that you want to produce turn-on curves for (e.g. MET : 100,120,150 GeV HT :  200,320,450 GeV).
 
 Make sure that when you evaluate the results, you use the same log-tranformation of the features (if any) as used for the training.
 
