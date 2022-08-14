@@ -1,0 +1,109 @@
+configfile: 'config.yaml'
+
+
+rule prepare_L1_regression_data:
+    input:
+        data = config['dataset'],
+        jet_corr_dir = config['jet_corr_dir']
+    output:
+        outfile_train = 'output/l1_regression_w_sig_train.h5',
+        outfile_test = 'output/l1_regression_w_sig_test.h5'
+    params:
+        train_test_split = 0.8,
+        jet_pt_filename = config['jet_pt_filename'],
+        jet_eta_filename = config['jet_eta_filename'],
+        plots = 'plot/',
+    shell:
+        'mkdir -p output;'
+        'mkdir -p {params.plots};'
+        'python create_L1regression_data.py --data_file {input.data} \
+                                            --outfile_train {output.outfile_train}\
+                                            --outfile_test {output.outfile_test}\
+                                            --plot_dir {params.plots}\
+                                            --jet_pt_filename {params.jet_pt_filename}\
+                                            --jet_eta_filename {params.jet_eta_filename}\
+                                            --jet_corr_dir {input.jet_corr_dir}\
+                                            --train_test_split {params.train_test_split}'
+
+rule selective_sampling_jets:
+    input:
+        data_train = rules.prepare_L1_regression_data.output.outfile_train,
+    params:
+        fractions_to_keep = '"0."',
+        mode = '"=="',
+        proc_names = '"QCD,W,hChToTauNu,hToTauTau"',
+        sampling_threshold = 110, #met around(~) 110-180, ht ~400, true_ht_over_reco_ht = ~2
+        txt_outfile = 'output/jet_summary_stat_{sampling_var}.txt',
+    output:
+        outfile = 'output/l1_regression_train_selective_{sampling_var}.h5',
+        outfile_discarded = 'output/l1_regression_train_discarded_{sampling_var}.h5',
+        plots = directory('plots_selective_{sampling_var}/')
+    shell:
+        'mkdir -p {output.plots};'
+        'python selective_sampling_jets.py --data_file {input.data_train} \
+                                      --proc_names {params.proc_names},\
+                                      --fractions_to_keep {params.fractions_to_keep}\
+                                      --mode {params.mode}\
+                                      --sampling_var {wildcards.sampling_var}\
+                                      --sampling_threshold {params.sampling_threshold}\
+                                      --outfile {output.outfile}\
+                                      --outfile_discarded {output.outfile_discarded}\
+                                      --txt_outfile {params.txt_outfile}\
+                                      --plot_dir {output.plots}'
+
+
+
+rule optimize_l1_teacher:
+    input:
+        data_file = 'output/l1_regression_w_sig_train.h5' 
+    params:
+        log_features = "''",#'"pt,met"',
+        loss_function = '"huber_1.0"',
+        metric_thresholds = '100,150',  #200,300 for ht, 100,150 for met in GeV, and if log is applied in log_features, it has to be different numbers (~5)
+        test_split = 0.2,
+        batch_size = 1024,
+        max_epochs = 50,   
+        hyperband_factor=3,
+        use_generator = 0,
+        max_events=1000000 #-1 will process all events
+    output:
+        output_dir = directory('output_w_sig_no_w_{variable}/'),
+    shell:
+        'python optimize_l1_teacher.py --data_file {input.data_file} \
+                                      --variable {wildcards.variable}\
+                                      --log_features {params.log_features}\
+                                      --loss_function {params.loss_function}\
+                                      --metric_thresholds {params.metric_thresholds}\
+                                      --test_split {params.test_split}\
+                                      --batch_size {params.batch_size}\
+                                      --max_epochs {params.max_epochs}\
+                                      --hyperband_factor {params.hyperband_factor}\
+                                      --output_dir {output.output_dir}\
+                                      --max_events {params.max_events}\
+                                      --use_generator {params.use_generator}'
+
+                                      
+
+rule analyze_results:
+    input:
+        data_file = 'output/l1_regression_w_sig_test.h5' 
+    params:
+        log_features = rules.optimize_l1_teacher.params.log_features,
+        loss_function = rules.optimize_l1_teacher.params.loss_function,
+        inclusive_thresholds = "'100,120,150'", #100,120,150 for met; 200,320,450 for HT
+        training_dir=rules.optimize_l1_teacher.output.output_dir,
+        use_generator = 0,
+        signal_names = "'W,hChToTauNu,hToTauTau'"  #W,hChToTauNu,hToTauTau
+    output:
+        plots = directory('plots_output_w_sig_no_w_train_max_{variable}/'),
+    shell:
+        'mkdir -p {output.plots};'
+        'python analyze_results_teacher.py --data_file {input.data_file} \
+                                      --loss_function {params.loss_function}\
+                                      --variable {wildcards.variable}\
+                                      --training_dir {params.training_dir}\
+                                      --log_features {params.log_features}\
+                                      --inclusive_thresholds {params.inclusive_thresholds}\
+                                      --plot_dir {output.plots}\
+                                      --signal_names {params.signal_names}\
+                                      --use_generator {params.use_generator};'

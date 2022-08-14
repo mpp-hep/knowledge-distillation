@@ -2,15 +2,16 @@ import h5py
 import numpy as np
 import matplotlib
 import argparse
+import matplotlib
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import os
 import shutil
+matplotlib.use("Agg") 
 
 matplotlib.rcParams.update({'font.size': 22,'figure.figsize':(7,8)})
 fixed_seed = 2021
 rng = np.random.default_rng(fixed_seed)
-
 
 def selective_sampling_func(sample,bincenters,ratio_function):
     random_array = rng.random(len(sample))
@@ -78,7 +79,6 @@ def main_selective_sampling(data_file_bg='',data_file_sig='',signal_name='',sign
     with h5py.File(outfile_discarded_test_loss,'w') as h5f:
         h5f.create_dataset('teacher_loss',data=train_loss[mask_bg_discarded])    
         h5f.create_dataset('data',data=train_data[mask_bg_discarded])        
-    
 
     #If we are also combining with signal, save the combination and the remaining signal for validation
     if signal_fraction > 0:    
