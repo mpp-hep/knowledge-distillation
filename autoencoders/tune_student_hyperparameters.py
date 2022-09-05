@@ -6,6 +6,7 @@ import keras_tuner
 import tensorflow as tf
 import argparse
 import setGPU
+import pickle
 
 from tensorflow import keras
 
@@ -250,8 +251,8 @@ class FixedArchHyperStudent(keras_tuner.HyperModel):
         hyper_student.summary()
         return hyper_student
 
-def optimisation(input_file, distillation_loss, n_nodes):
-
+def optimisation(input_file, distillation_loss, n_nodes, printconflut):
+    printconflut = True
     # load teacher's loss for training
     with h5py.File(input_file, 'r') as f:
         x_train = np.array(f['data'][:,:,:3])
@@ -268,6 +269,31 @@ def optimisation(input_file, distillation_loss, n_nodes):
               )
     else:
         hypermodel = HyperStudent(x_train.shape, distillation_loss)
+        #tuner = keras_tuner.Hyperband(
+        #      hypermodel,
+        #      objective='val_loss',
+        #      #max_trials=len(hypermodel.model_configurations),
+        #      overwrite=True,
+        #      directory='output/hyper_tuning',
+        #      max_epochs=100
+        #      )
+        if (printconflut == True):
+            with open("model_confs",'wb') as f:
+                # for i in hypermodel.model_configurations:
+                #     # for j in i:
+                #     #     f.write(str(j))
+                #     #     f.write(',')
+                #     f.write(str(i))
+                #     f.write('\n')
+                pickle.dump(hypermodel.model_configurations,f)
+
+            with open("bits_confs",'wb') as f:
+            #     for i in hypermodel.bits_configurations:
+            #         f.write(str(i))
+            #         f.write('\n')
+                pickle.dump(hypermodel.bits_configurations,f)
+            print('Index LUTs written on file')
+            return 0
         tuner = keras_tuner.RandomSearch(
               hypermodel,
               objective='val_loss',
@@ -286,7 +312,8 @@ def optimisation(input_file, distillation_loss, n_nodes):
     tuner.search(
         x=x_train,
         y=y_train,
-        epochs=1,
+        epochs=3,
+        batch_size=2048,
         validation_split=0.2,
         callbacks=callbacks
         )
@@ -308,5 +335,6 @@ if __name__ == '__main__':
     parser.add_argument('--input-file', type=str, help='input file', required=True)
     parser.add_argument('--distillation-loss', type=str, default='mse', help='Loss to use for distillation')
     parser.add_argument('--n-nodes', nargs='+', type=int, default=None, help='# nodes for each layer for a search of optimal quantization with fixed network architecture')
+    parser.add_argument('--printconflut', type=bool, default=False)
     args = parser.parse_args()
     optimisation(**vars(args))
