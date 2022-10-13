@@ -1,0 +1,49 @@
+[96m
+GPU: NVIDIA GeForce GTX 1080 Ti[0m
+[92mSaved hyperparameters to json file.[0m
+[95m
+DATA DEETS[0m
+[95m-----------[0m
+data_folder: /work/deodagiu/ki_data/intnet_input
+norm: robust
+train_events: -1
+test_events: 0
+pt_min: 2.0
+nconstituents: 16
+feature_selection: jedinet
+
+----------------
+[92mData loading complete:[0m
+Training data size: 5.72e+05
+Test data size: 0.00e+00
+----------------
+
+Shuffling constituents...
+[92mShuffled the training data! 🃏
+[0m
+Importing the teacher network model...
+Instantiating the student network model...
+Making the distiller...
+[95m
+TEACHING THE STUDENT 💪[0m
+====================
+
+Training Parameters
+-------------------
+[92mOptimiser: 		[0m {'name': 'Adam', 'learning_rate': 0.001, 'decay': 0.0, 'beta_1': 0.9, 'beta_2': 0.999, 'epsilon': 1e-07, 'amsgrad': False}
+[92mBatch size: 		[0m 2048
+[92mTraining epochs:	[0m 500
+[92mLoss student: 		[0m <function softmax_cross_entropy_with_logits_v2 at 0x7f97aa292560>
+[92mLoss distill: 		[0m <keras.losses.KLDivergence object at 0x7f978013dae0>
+
+Epoch 1/500
+Traceback (most recent call last):
+  File "/work/deodagiu/ki/bin/./student_train", line 92, in <module>
+    main(args)
+  File "/work/deodagiu/ki/bin/../studentnets/train.py", line 50, in main
+    history = distiller.fit(
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 67, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/work/deodagiu/ki/bin/../studentnets/distiller.py", line 74, in train_step
+    self.compiled_metrics.update_state(y, y_prediction)
+NameError: name 'y_prediction' is not defined
