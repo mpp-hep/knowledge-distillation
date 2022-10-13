@@ -15,5 +15,8 @@ train: '/eos/user/n/nchernya/MLHEP/AnomalyDetection/autoencoder_for_anomaly/grap
 test: '/eos/user/n/nchernya/MLHEP/AnomalyDetection/autoencoder_for_anomaly/graph_AD_event_based/run_19/evaluated/background_validation_fixed_evaluated_model21_merged.h5'
 
 # CNN teacher model
-json: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q0-not_pruned.json'
-h5: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q0-not_pruned.h5'
+json: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q4-pruned.json'
+h5: '/eos/cms/store/cmst3/user/egovorko/paper_output/model-conv_ae-8-b0-q4-pruned.h5'
+
+# Big Teacher AE with around 75k parameters
+big_teacher_h5: '/afs/cern.ch/work/e/egovorko/public/big_teacher.h5'

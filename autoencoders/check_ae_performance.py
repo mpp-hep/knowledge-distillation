@@ -173,6 +173,7 @@ def main(args):
             custom_objects={'make_mse': make_mse}
             )
 
+    model.summary()
     # load dataset and pt scaler
     with open(args.dataset, 'rb') as f:
         x_train, y_train, x_test, y_test, _, _, _, pt_scaler, _, _, _, _ = pickle.load(f)
@@ -190,11 +191,33 @@ def main(args):
     plt.clf()
 
     # plot reconstructions
+    bsm_losses = []
     plot_reconstruction(x_target, x_predicted)
     for i, bsm in enumerate(args.signal):
         bsm_loss, bsm_target, bsm_predicted = evaluate(model, bsm[1], pt_scaler)
+        bsm_losses.append([bsm, bsm_loss])
         plot_reconstruction(bsm_target, bsm_predicted, bsm[0])
 
+    plt.hist(background_loss,
+        label='background',
+        density=True,
+        alpha=0.5,
+        bins=100,
+        range=(0,5)
+        )
+    for bsm_obj in bsm_losses:
+        bsm = bsm_obj[0]
+        bsm_loss = bsm_obj[1]
+        plt.hist(bsm_loss,
+            label=bsm,
+            density=True,
+            alpha=0.5,
+            bins=100,
+            range=(0,5)
+            )
+    plt.legend(loc='best')
+    plt.savefig('plots/bsm_loss.pdf')
+    plt.clf()
 
 
 if __name__ == '__main__':
