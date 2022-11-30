@@ -1,0 +1,12 @@
+# Running the data preparation template.
+python prepare_data.py [path_to_data] [output_path] --min_pt [minimum_pt_data_can_have] --max_constituents [max_constituents_any_jet_can_have] --type [type_of_data_selection_to_employ] --flag [extra_string_at_end_of_filename]
+
+# Running the data preparation with basic settings on the training data.
+python prepare_data.py ../../ki_data/train/ ../../ki_data/ --min_pt 2 --max_constituents 8 --type andre --flag train
+
+# Running the data normalisation template.
+python normalise_mlready_data.py --x_data_paths [paths_to_train_and_test_datasets] --y_data_paths [paths_to_train_and_test_targets] --output_dir [path_to_output_folder] --norm [type_of_normalisation_to_employ] --test_split [fraction_of_data_to_go_to_the_test_set]
+
+# Running the data normalisation basic settings.
+python normalise_mlready_data.py --x_data_paths ../../ki_data/x_jet_images_c8_pt2.0_train.npy ../../ki_data/x_jet_images_c8_pt2.0_test.npy --y_data_paths ../../ki_data/y_jet_images_c8_pt2.0_train.npy ../../ki_data/y_jet_images_c8_pt2.0_test.npy --output_dir ../../ki_data/intnet_input/ --norm nonorm --test_split 0.33
+

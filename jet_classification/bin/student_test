@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+
+# Run the testing of the interaction network.
+import argparse
+import sys
+import os
+sys.path.append("..")
+
+from studentnets.test import main
+parser = argparse.ArgumentParser(formatter_class=argparse.
+                                 ArgumentDefaultsHelpFormatter)
+parser.add_argument("--test_events", type=int, default=-1,
+                    help="The exact number of training events to use.")
+parser.add_argument("--model_dir", type=str, default="./trained_intnets/test",
+                    help="The output directory name.")
+parser.add_argument("--gpu", type=str, default="0",
+                    help="Sets the number of the GPU to run on.")
+parser.add_argument("--seed", type=int, default=321,
+                    help="Seed to use in shuffling the data and any other thing.")
+parser.add_argument("--jet_seed", type=int, default=123,
+                    help="Seed to use in shuffling the jets.")
+args = parser.parse_args()
+
+
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+data_hyperparams = {
+    "train_events":      0,
+    "test_events":       args.test_events,
+}
+
+args = {
+    "data_hyperparams": data_hyperparams,
+    "model_dir":        args.model_dir,
+    "seed":             args.seed,
+    "jet_seed":         args.jet_seed,
+}
+
+main(args)

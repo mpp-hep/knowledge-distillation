@@ -1,0 +1,11 @@
+Loading the files...
+
+Equalizing data classes...
+[92mApplying robust normalisation...[0m
+Traceback (most recent call last):
+  File "/work/deodagiu/ki/preprocessing/normalise_mlready_data.py", line 344, in <module>
+    main(args)
+  File "/work/deodagiu/ki/preprocessing/normalise_mlready_data.py", line 71, in main
+    plots_folder = format_output_filename(args.x_data_paths[0], args.norm)
+AttributeError: 'Namespace' object has no attribute 'x_data_paths'. Did you mean: 'x_data_path_test'?
+mv: cannot stat ‘./logs/intnet_gpu_103108.out’: No such file or directory

@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+
+# Run the training of the interaction network..
+import argparse
+import sys
+sys.path.append("..")
+
+from studentnets.train import main
+parser = argparse.ArgumentParser(formatter_class=argparse.
+                                 ArgumentDefaultsHelpFormatter)
+parser.add_argument("--data_folder", type=str, default='../../ki_data/intnet_input',
+                    help="The folder where the data is stored on the system..")
+parser.add_argument("--norm", type=str, default='minmax',
+                    help="The name of the normalisation that you'll to use.")
+parser.add_argument("--train_events", type=int, default=-1,
+                    help="The exact number of training events to use.")
+parser.add_argument("--seed", type=int, default=321,
+                    help="Seed to use in any random thing that is done.")
+parser.add_argument("--jet_seed", type=int, default=123,
+                    help="Seed to use in shuffling the jets.")
+parser.add_argument('--lr', type=float, default=0.0001,
+                    help="The learning rate.")
+parser.add_argument("--batch", type=int, default=50,
+                    help="The batch size.")
+parser.add_argument("--epochs", type=int, default=100,
+                    help="The number of training epochs.")
+parser.add_argument("--optimizer", type=str, default="adam",
+                    help="Name of the optimiser you want to use.")
+parser.add_argument("--student_loss", type=str, default="softmax_with_crossentropy",
+                    help="Name of the loss function for the student.")
+parser.add_argument("--distill_loss", type=str, default="kl_divergence",
+                    help="Name of the loss for student-teacher differences.")
+parser.add_argument("--metrics", type=str, default="categorical_accuracy",
+                    help="Name of the success metric you want to use.")
+parser.add_argument("--teacher", type=str,
+                    help="Path to a tensorflow trained network to use as teacher.")
+parser.add_argument("--student_type", type=str, default="unistudent",
+                    help="The type of student to instantiate.")
+parser.add_argument("--alpha", type=float, default=0.1,
+                    help="Weight for the distillation loss function.")
+parser.add_argument("--temperature", type=int, default=10,
+                    help="Name of the optimiser you want to use.")
+parser.add_argument("--outdir", type=str, default="test",
+                    help="The output directory name.")
+args = parser.parse_args()
+
+
+data_hyperparams = {
+    "data_folder":       args.data_folder,
+    "norm":              args.norm,
+    "train_events":      args.train_events,
+    "test_events":       0,
+    "pt_min":            "2.0",
+    "nconstituents":     "16",
+    "feature_selection": "jedinet",
+}
+
+training_hyperparams = {
+    "batch":  args.batch,
+    "lr":     args.lr,
+    "epochs": args.epochs,
+}
+
+student_hyperparams = {
+    "node_size":    80,
+    "activ":        "elu",
+    "dropout_rate": 0.11,
+    "nclasses":     5,
+}
+
+distiller_hyperparams = {
+    "optimizer":       args.optimizer,
+    "student_loss_fn": args.student_loss,
+    "distill_loss_fn": args.distill_loss,
+    "alpha":           args.alpha,
+    "temperature":     args.temperature,
+}
+
+args = {
+    "data_hyperparams":     data_hyperparams,
+    "training_hyperparams": training_hyperparams,
+    "student_type":         args.student_type,
+    "teacher":              args.teacher,
+    "student":              student_hyperparams,
+    "distill":              distiller_hyperparams,
+    "outdir":               args.outdir,
+    "seed":                 args.seed,
+    "jet_seed":             args.jet_seed,
+}
+
+main(args)

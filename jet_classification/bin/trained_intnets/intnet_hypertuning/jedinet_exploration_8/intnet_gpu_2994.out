@@ -1,0 +1,22 @@
+[96m
+GPU: NVIDIA GeForce GTX 1080 Ti[0m
+Traceback (most recent call last):
+  File "/work/deodagiu/ki/bin/./intnet_train", line 100, in <module>
+    main(args)
+  File "/work/deodagiu/ki/bin/../intnets/train.py", line 26, in main
+    util.save_hyperparameters_file(args, outdir)
+  File "/work/deodagiu/ki/bin/../intnets/util.py", line 108, in save_hyperparameters_file
+    json.dump(hyperparams, file)
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/__init__.py", line 179, in dump
+    for chunk in iterable:
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/encoder.py", line 431, in _iterencode
+    yield from _iterencode_dict(o, _current_indent_level)
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/encoder.py", line 405, in _iterencode_dict
+    yield from chunks
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/encoder.py", line 405, in _iterencode_dict
+    yield from chunks
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/encoder.py", line 438, in _iterencode
+    o = _default(o)
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/json/encoder.py", line 179, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type Adam is not JSON serializable

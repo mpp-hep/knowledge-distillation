@@ -1,0 +1,60 @@
+[96m
+GPU: NVIDIA GeForce GTX 1080 Ti[0m
+[95m
+DATA DETAILS[0m
+[95m-----------[0m
+data_folder: /work/deodagiu/ki_data/intnet_input
+norm: minmax
+train_events: -1
+test_events: 0
+pt_min: 2.0
+nconstituents: 16
+feature_selection: jedinet
+
+----------------
+[92mData loading complete:[0m
+Training data size: 5.72e+05
+Test data size: 0.00e+00
+----------------
+
+Shuffling constituents...
+[92mShuffled the training data! 🃏
+[0m
+Instantiating model with the hyperparameters:
+effects_nnodes: 50
+dynamic_nnodes: 50
+abstrac_nnodes: 50
+effects_activ: relu
+dynamic_activ: relu
+abstrac_activ: selu
+neffects: 14
+ndynamics: 12
+l2: 0.01
+summation: True
+Traceback (most recent call last):
+  File "/work/deodagiu/ki/bin/./intnet_train", line 100, in <module>
+    main(args)
+  File "/work/deodagiu/ki/bin/../intnets/train.py", line 30, in main
+    model = util.choose_intnet(
+  File "/work/deodagiu/ki/bin/../intnets/util.py", line 91, in choose_intnet
+    model.build((None, nconst, nfeats))
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/site-packages/keras/engine/training.py", line 449, in build
+    self.call(x, **kwargs)
+  File "/work/deodagiu/ki/bin/../intnets/densintnet.py", line 223, in call
+    effects = self._effects_mlp(rs_matrix)
+  File "/work/deodagiu/miniconda/envs/ki_intnets/lib/python3.10/site-packages/keras/utils/traceback_utils.py", line 67, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/tmp/__autograph_generated_filee0d3inqo.py", line 14, in tf__call
+    x = ag__.converted_call(ag__.ld(self)._hid_layer_3, (ag__.ld(x),), None, fscope)
+AttributeError: Exception encountered when calling layer "relational_model" (type EffectsMLP).
+
+in user code:
+
+    File "/work/deodagiu/ki/bin/../intnets/densintnet.py", line 47, in call  *
+        x = self._hid_layer_3(x)
+
+    AttributeError: 'EffectsMLP' object has no attribute '_hid_layer_3'
+
+
+Call arguments received by layer "relational_model" (type EffectsMLP):
+  • inputs=tf.Tensor(shape=(None, 240, 32), dtype=float64)

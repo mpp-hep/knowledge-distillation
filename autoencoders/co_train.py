@@ -110,7 +110,7 @@ def teacher_student_cotrain(data_file,
     
     # load the data
     with open(data_file, 'rb') as f:
-        x_train, y_train, x_test, y_test, all_bsm_data, pt_scaler, _, _, _ = pickle.load(f)
+        x_train, y_train, x_test, y_test, _, _, all_bsm_data, pt_scaler, _, _, _, _ = pickle.load(f)
     
     # student model
     student_model = student(
