@@ -7,7 +7,7 @@ import tensorflow as tf
 import argparse
 import setGPU
 import pickle
-
+import json
 from tensorflow import keras
 
 from tensorflow.keras import layers
@@ -26,20 +26,20 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 from qkeras.qlayers import QDense, QActivation
 from qkeras.quantizers import quantized_bits, quantized_relu
-
+tf.random.set_seed(1234)
 tracking_address = '../output/tb_logs' # the path of your log file for TensorBoard
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 class HyperStudent(keras_tuner.HyperModel):
 
-    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,5000),quantized = True):#  4500,5000
+    def __init__(self, input_shape, distillation_loss, param_threshold=(4500,8000),quantized = True):#  4500,5000
         self.input_shape = input_shape
         self.distillation_loss = distillation_loss
         self.quantized = quantized
         self.num_layers = [2,3,4]
-        self.num_params = [4,8,16,32, 64]
-        self.quant_bits = [[4,1],[8,3],[16,6]]
+        self.num_params = [16,32, 64,128]
+        self.quant_bits = [[8,3],[16,6]]
         self.quant_idx = [] 
         # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
         flat_quant_bits = [x for xs in self.quant_bits for x in xs]
@@ -100,7 +100,7 @@ class HyperStudent(keras_tuner.HyperModel):
         #quantized = True
         inputs = keras.Input(shape=self.input_shape[1:])
         x = layers.Flatten()(inputs)
-
+        print(self.model_configurations)
         config_index = hp.Int("config_indx", min_value=0, max_value=len(self.model_configurations)-1, step=1)
         bits_index = 0
         selected_bits_conf = []
@@ -132,13 +132,14 @@ class HyperStudent(keras_tuner.HyperModel):
             if self.quantized:
 
                 print("Bitwidth of QDense layer # ",i)
+                #print(selected_bits_conf)
                 print(selected_bits_conf[bits_index][i])
                 x = QDense(units=units, activation=quantized_relu(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1]), \
                         kernel_quantizer=quantized_bits(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1],alpha=1), \
                         bias_quantizer=quantized_bits(selected_bits_conf[bits_index][i][0],selected_bits_conf[bits_index][i][1],alpha=1), kernel_initializer='random_normal')(x)
                 i += 1
             else:
-                x = layers.Dense(units=units,activation='relu')(x)
+                x = layers.Dense(units=units,activation='relu',kernel_initializer='random_normal')(x)
             
         
         # The last layer contains 1 unit, which
@@ -170,7 +171,7 @@ class FixedArchHyperStudent(keras_tuner.HyperModel):
     def __init__(self, input_shape, distillation_loss, n_nodes=[4,8,16]):
         self.input_shape = input_shape
         self.distillation_loss = distillation_loss
-        self.quant_bits = [[4,1],[8,3],[16,6]]
+        self.quant_bits = [[8,3],[16,6]]
         self.quant_idx = [] 
         self.n_nodes = n_nodes
         # assign an index for each type of quantization, making sure that the chosen number is not present in any of the combinations
@@ -238,7 +239,7 @@ class FixedArchHyperStudent(keras_tuner.HyperModel):
         final_quant = self.quant_bits[final_quant_idx]
         print("Bitwidth of final QDense layer")
         print(final_quant)
-        outputs = QDense(1,kernel_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1),bias_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1))(x)
+        outputs = QDense(1,kernel_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1),bias_quantizer=quantized_bits(final_quant[0],final_quant[1],alpha=1),kernel_initializer='random_normal')(x)
         outputs = QActivation(activation=quantized_relu(final_quant[0],final_quant[1]))(outputs)
         
 
@@ -252,7 +253,7 @@ class FixedArchHyperStudent(keras_tuner.HyperModel):
         return hyper_student
 
 def optimisation(input_file, distillation_loss, n_nodes, printconflut):
-    printconflut = True
+    printconflut = False
     # load teacher's loss for training
     with h5py.File(input_file, 'r') as f:
         x_train = np.array(f['data'][:,:,:3])
@@ -299,20 +300,20 @@ def optimisation(input_file, distillation_loss, n_nodes, printconflut):
               objective='val_loss',
               max_trials=len(hypermodel.model_configurations),
               overwrite=True,
-              directory='output/hyper_tuning',
+              directory='output/hyper_tuning_2',
               )
     tuner.search_space_summary()
     # Use the TensorBoard callback.
     # The logs will be write to "/tmp/tb_logs".
     callbacks=[
         TensorBoard(log_dir=tracking_address, histogram_freq=1),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1),
+        EarlyStopping(monitor='val_loss', patience=3, verbose=1),
         ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_lr=1e-9)
         ]
     tuner.search(
         x=x_train,
         y=y_train,
-        epochs=3,
+        epochs=10,
         batch_size=2048,
         validation_split=0.2,
         callbacks=callbacks
@@ -321,14 +322,96 @@ def optimisation(input_file, distillation_loss, n_nodes, printconflut):
     tuner.results_summary()
     logging.info('Get the optimal hyperparameters')
 
-    best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
+    best_hps = tuner.get_best_hyperparameters(num_trials=len(hypermodel.model_configurations))
 
     logging.info('Getting and printing best hyperparameters!')
     if n_nodes:
         print('Optimal Configuration:', hypermodel.bits_configurations[best_hps['config_indx']])
     else:
-        print('Optimal Configuration:', hypermodel.model_configurations[best_hps['config_indx']])
+        print('Optimal Configuration:', hypermodel.model_configurations[best_hps[0]['config_indx']])
+    bestlist = []
+    for i in best_hps:
+        bestlist.append(keras_tuner.engine.hyperparameters.serialize(i))
+    with open('output/hpdumplocalnoquant128test2.json', 'w') as fp:
+        json.dump(bestlist, fp)
 
+
+def outer_compute_model_params(input_shape,config):
+        total_params = 0
+        total_params += np.prod(input_shape)*config[0]
+        total_params += config[-1]
+        for i in range(len(config)-1):
+            total_params += config[i]*config[i+1]
+        return total_params
+
+def multioptimisation(input_file, distillation_loss,modelslist):
+    # load teacher's loss for training
+    with h5py.File(input_file, 'r') as f:
+        x_train = np.array(f['data'][:,:,:3])
+        y_train = np.array(f['teacher_loss'])
+
+    # The logs will be write to "/tmp/tb_logs".
+    callbacks=[
+        TensorBoard(log_dir=tracking_address, histogram_freq=1),
+        EarlyStopping(monitor='val_loss', patience=2, verbose=1),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=1, verbose=1, min_lr=1e-9)
+        ]
+
+    num_layers = [2,3,4]
+    num_params = [16,32, 64,128]
+    model_configurations = []
+    for nl in num_layers:
+        grid_choices = np.tile(num_params, (nl,1))
+        configs = np.array(np.meshgrid(*grid_choices)).T.reshape(-1, nl)
+        model_configurations.append(configs.tolist())
+
+    model_configurations = [num for sublist in model_configurations for num in sublist]
+    accepted_confs = []
+    for config in model_configurations:
+        params = outer_compute_model_params([19,3,1],config)
+        if params <= 8000 and params >= 4500:
+            accepted_confs.append(config)
+
+    with open(modelslist, 'r') as fp:
+        jsonlist = json.load(fp)
+
+    bestlist = []
+    for i,hpsconf in enumerate(jsonlist[:10]):
+        modelsconf=accepted_confs[hpsconf['config']['values']['config_indx']]
+        print(modelsconf)
+        hypermodel = FixedArchHyperStudent(x_train.shape, distillation_loss, modelsconf)
+        tuner = keras_tuner.RandomSearch(
+              hypermodel,
+              objective='val_loss',
+              max_trials=len(hypermodel.bits_configurations),
+              overwrite=True,
+              directory='output/hyper_tuning_quant_' + str(i),
+              )
+        tuner.search_space_summary()
+        tuner.search(
+            x=x_train,
+            y=y_train,
+            epochs=5,
+            batch_size=4096,
+            validation_split=0.2,
+            callbacks=callbacks
+            )
+
+        tuner.results_summary()
+        logging.info('Get the optimal hyperparameters')
+
+        best_hps = tuner.get_best_hyperparameters(num_trials=len(hypermodel.bits_configurations))
+        print(best_hps)
+        # finmod = tuner.hypermodel.build(best_hps)
+        logging.info('Getting and printing best hyperparameters!')
+        print('Optimal Configuration:', hypermodel.bits_configurations[best_hps[0]['bits_indx']], hypermodel.quant_bits[best_hps[0]['final_quant_idx']])
+
+        bestquant = [str(i)+"_place"]
+        for i in best_hps:
+            bestquant.append(keras_tuner.engine.hyperparameters.serialize(i))
+        bestlist.append(bestquant)
+    with open('hpdumppostsearch2testss.json', 'w') as fp:
+        json.dump(bestlist, fp)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -336,5 +419,9 @@ if __name__ == '__main__':
     parser.add_argument('--distillation-loss', type=str, default='mse', help='Loss to use for distillation')
     parser.add_argument('--n-nodes', nargs='+', type=int, default=None, help='# nodes for each layer for a search of optimal quantization with fixed network architecture')
     parser.add_argument('--printconflut', type=bool, default=False)
+    parser.add_argument('--model-to-quant', type=str, default=None, help='json produced by keras tuner with hyperparameters to perform QAT with fixed archs')
     args = parser.parse_args()
-    optimisation(**vars(args))
+    if (args.model_to_quant):
+        multioptimisation(args.input_file,args.distillation_loss,args.model_to_quant)
+    else:
+        optimisation(**vars(args))
