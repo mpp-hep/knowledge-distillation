@@ -12,17 +12,19 @@ def check_proportions(dataset):
         print(f'Percent of {ids} is {dataset[dataset==i].shape[0]/dataset.shape[0]*100:0.2f}')
 
 def filter_no_leptons(data, background_ID=None):
-    is_ele = data[:,1,0] > 23
-    is_mu = data[:,5,0] > 23
-    is_lep = (is_ele+is_mu) > 0
-    data_filtered = data[is_lep]
+    locs = np.logical_or(np.greater_equal(data[:,1,0], 23), np.greater_equal(data[:,5,0], 23))
+    data_filtered = data[locs]
+    print(data_filtered)
+
     if background_ID is not None:
         print(f'IDs before filtering:')
         check_proportions(background_ID)
-        background_ID_filtered = background_ID[is_lep]
+        background_ID_filtered = background_ID[locs]
+
         print(f'IDs after filtering: ')
         check_proportions(background_ID_filtered)
         return data_filtered, background_ID_filtered
+
     return data_filtered
 
 # remove jets eta >4 or <-4 and fix pT ordering
@@ -64,15 +66,20 @@ def prepare_data(input_file, events, input_bsm, output_file):
     data_target[:,:,0] = pt_scaler.fit_transform(data_target[:,:,0])
     data_target[:,:,0] = np.multiply(data_target[:,:,0], np.not_equal(data[:,:,0],0))
     # define training, test and validation datasets
-    X_train, X_test, Y_train, Y_test, background_ID_train, background_ID_test = \
-        train_test_split(data, data_target, background_ID, test_size=0.5, shuffle=True)
+    x_train, x_test, y_train, y_test, background_ID_train, background_ID_test = \
+        train_test_split(data, data_target, background_ID, test_size=0.2, shuffle=True)
     del data, data_target
+    x_train, x_val, y_train, y_val, background_ID_train, background_ID_val = \
+        train_test_split(x_train, y_train, background_ID_train,
+            test_size=0.25, shuffle=True)
 
-    X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], X_train.shape[2], 1)
-    X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], X_test.shape[2], 1)
+    x_train = x_train.reshape(x_train.shape[0], x_train.shape[1], x_train.shape[2], 1)
+    x_test = x_test.reshape(x_test.shape[0], x_test.shape[1], x_test.shape[2], 1)
+    x_val = x_val.reshape(x_val.shape[0], x_val.shape[1], x_val.shape[2], 1)
 
-    Y_train = Y_train.reshape(Y_train.shape[0], Y_train.shape[1], Y_train.shape[2], 1)
-    Y_test = Y_test.reshape(Y_test.shape[0], Y_test.shape[1], Y_test.shape[2], 1)
+    y_train = y_train.reshape(y_train.shape[0], y_train.shape[1], y_train.shape[2], 1)
+    y_test = y_test.reshape(y_test.shape[0], y_test.shape[1], y_test.shape[2], 1)
+    y_val = y_val.reshape(y_val.shape[0], y_val.shape[1], y_val.shape[2], 1)
 
     # read BSM data
     bsm_data = []
@@ -131,12 +138,14 @@ def prepare_data(input_file, events, input_bsm, output_file):
         monojet = monojet.reshape(monojet.shape[0],monojet.shape[1],monojet.shape[2],1)
         bsm_data.append(monojet)
 
-    data = [X_train, Y_train,
-            X_test, Y_test,
+    data = [x_train, y_train,
+            x_test, y_test,
+            x_val, y_val,
             bsm_data,
             pt_scaler,
             background_ID_train,
             background_ID_test,
+            background_ID_val,
             background_ID_names]
 
     with open(output_file, 'wb') as handle:

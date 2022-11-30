@@ -25,7 +25,11 @@ from qkeras import (
     quantized_bits
     )
 from tensorflow_model_optimization.python.core.sparsity.keras import pruning_wrapper
-from reformat_ae_l1_data import idx_met_0,idx_met_1,idx_eg_0,idx_eg_1,idx_mu_0,idx_mu_1,idx_jet_0,idx_jet_1
+
+idx_met_0,idx_met_1=0,1
+idx_eg_0,idx_eg_1=1,5
+idx_mu_0,idx_mu_1=5,9
+idx_jet_0,idx_jet_1=9,19
 
 
 # number of integer bits for each bit width
