@@ -149,7 +149,7 @@ def student_model(input_shape, node_size, quant_size, dropout, expose_latent=Fal
         kernel_quantizer = f'quantized_bits({quant_size},{int_size},0,alpha=1)',
         bias_quantizer = f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x) \
         if quant_size else \
-        Dense(node_size)(x)
+        Dense(8)(x)
     latent = x
     if dropout:
         x = Dropout(dropout)(x)
@@ -199,7 +199,7 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
         x = ZeroPadding2D(((1,0),(0,0)))(input_encoder)
     x = BatchNormalization()(x)
     #
-    x = Conv2D(16, kernel_size=(3,3), use_bias=False, padding='valid')(x) if quant_size==0 \
+    x = Conv2D(128, kernel_size=(3,3), use_bias=False, padding='valid')(x) if quant_size==0 \
         else QConv2D(16, kernel_size=(3,3), use_bias=False, padding='valid',
                          kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
     x = Activation('relu')(x) if quant_size==0 \
@@ -207,7 +207,7 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
 
     x = AveragePooling2D(pool_size=(3, 1))(x)
     #
-    x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+    x = Conv2D(64, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
         else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
                          kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
     x = Activation('relu')(x) if quant_size==0 \
@@ -236,7 +236,7 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
     #
     x = Reshape((2,1,32))(x)
     #
-    x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+    x = Conv2D(64, kernel_size=(3,3), use_bias=False, padding='same')(x) if quant_size==0 \
         else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
                          kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
     x = Activation('relu')(x) if quant_size==0 \
@@ -245,7 +245,7 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
     x = UpSampling2D((3,1))(x)
     x = ZeroPadding2D(((0,0),(1,1)))(x)
 
-    x = Conv2D(16, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+    x = Conv2D(128, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
         else QConv2D(16, kernel_size=(3,1), use_bias=False, padding='same',
                          kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
     x = Activation('relu')(x) if quant_size==0 \
