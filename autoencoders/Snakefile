@@ -59,7 +59,7 @@ rule check_big_teacher_performance:
 rule reformat_ae_l1_data:
     input:
         data = '/content/drive/MyDrive/data_-1.pickle',
-        teacher_h5 = rules.tune_teacher_kd_ae_l1.output
+        teacher_h5 = '/content/drive/MyDrive/big_teacher.h5'
     output:
         train_loss = 'output/l1_ae_train_loss.h5',
         test_loss = 'output/l1_ae_test_loss.h5',
