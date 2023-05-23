@@ -1,12 +1,16 @@
-configfile: 'config.yaml'
+configfile:
+    'config.yaml'
+
 
 rule prepare_data:
     ''' Prepare data for training'''
     input:
-        script = 'prepare_data.py',
-        qcd = config['background'],
+        qcd = config['background']
     output:
-        config['dataset']
+        datasets = 'output/datasets_{events}.npy',
+        bsm_datasets = 'output/bsm_datasets_{events}.npy',
+        pt_scaler = 'output/pt_scaler_{events}.pickle',
+        background_ids = 'output/background_IDs_{events}.npy'
     params:
         leptoquarks = config['leptoquarks'],
         ato4l = config['ato4l'],
@@ -14,18 +18,18 @@ rule prepare_data:
         hToTauTau = config['hToTauTau'],
         monojet = config['monojet']
     shell:
-        'python {input.script} --output-file {output} \
-                               --input-file {input.qcd} \
-                               --events {wildcards.events} \
-                               --input-bsm {params.leptoquarks} \
-                               --input-bsm {params.ato4l} \
-                               --input-bsm {params.hChToTauNu} \
-                               --input-bsm {params.hToTauTau} \
-                               --input-bsm {params.monojet}'
+        'mkdir -p output; '
+        'python prepare_data.py {input.qcd} {output.datasets} {output.bsm_datasets} \
+            {output.pt_scaler} {output.background_ids} \
+            --events {wildcards.events} \
+            --input-bsm leptoquark {params.leptoquarks} \
+            --input-bsm ato4l {params.ato4l} \
+            --input-bsm hChToTauNu {params.hChToTauNu} \
+            --input-bsm hToTauTau {params.hToTauTau} '
 
 rule tune_teacher_kd_ae_l1:
     input:
-        data = expand(config['dataset'], events=-1)
+        data = expand(rules.prepare_data.output.datasets, events=-1)
     output:
         'output/big_teacher.h5'
     shell:
@@ -147,7 +151,8 @@ rule kd_ae_l1_train:
 
 rule kd_ae_l1_plot:
     input:
-        student = expand(rules.kd_ae_l1_train.output.result, quant_size='{quant_size}'),
+        student = expand(rules.kd_ae_l1_train.output.result,
+                         quant_size='{quant_size}'),
         teacher = rules.reformat_ae_l1_data.output.test_loss,
         signal = rules.reformat_ae_l1_data.output.signal_loss
     params:
@@ -186,7 +191,7 @@ rule kd_graph_train:
         signal = config['signal']
     params:
         data_name = 'InputParticlesOriginal',
-        loss_name = 'loss_pid', # loss_all_reco_chamfer
+        loss_name = 'loss_pid',  # loss_all_reco_chamfer
         distillation_loss = 'mse',
         n_features = 3,
         plots = 'plots/graph/',
@@ -212,7 +217,7 @@ rule kd_graph_train:
                                           --output-result {output.result} \
                                           --output-dir {params.plots} \
                                           --particles-shuffle-strategy {params.shuffle_strategy} \
-                                          --particles-shuffle-during  {params.shuffle_during} '                                          
+                                          --particles-shuffle-during  {params.shuffle_during} '
 
 rule kd_graph_plot:
     input:
@@ -259,7 +264,7 @@ rule co_train_results:
                             --teacher-output-signal-loss {params.signal_loss}\
                             --student-output-result {params.result}\
                             --output-dir {params.dir}'
-                            
+
 rule co_train_plot:
     input:
         student = rules.co_train_results.params.result,
@@ -275,7 +280,7 @@ rule co_train_plot:
                                 --teacher-loss-name {params.loss_name} \
                                 --output-dir {params.plots} \
                                 --signal {input.signal}'
-                                
+
 rule co_train_latent:
     input:
         data = config['dataset'],
@@ -286,7 +291,7 @@ rule co_train_latent:
         'python co_train.py --data-file {input.data} \
                             --output-dir {params.dir}\
                             --include-latent-loss True'
-                            
+
 rule co_train_latent_results:
     input:
         data = config['dataset'],
@@ -304,7 +309,7 @@ rule co_train_latent_results:
                             --teacher-output-signal-loss {params.signal_loss}\
                             --student-output-result {params.result}\
                             --output-dir {params.dir}'
-                            
+
 rule co_train_latent_plot:
     input:
         student = rules.co_train_latent_results.params.result,

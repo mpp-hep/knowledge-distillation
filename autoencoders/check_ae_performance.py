@@ -1,6 +1,5 @@
 import math
 import h5py
-import os
 import argparse
 import pickle
 import numpy as np
