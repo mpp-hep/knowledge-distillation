@@ -6,20 +6,20 @@ rule prepare_data:
     ''' Prepare data for training'''
     input:
         qcd = config['background']
-    output:
-        datasets = 'output/datasets_{events}.npy',
-        bsm_datasets = 'output/bsm_datasets_{events}.npy',
-        pt_scaler = 'output/pt_scaler_{events}.pickle',
-        background_ids = 'output/background_IDs_{events}.npy'
     params:
         leptoquarks = config['leptoquarks'],
         ato4l = config['ato4l'],
         hChToTauNu = config['hChToTauNu'],
         hToTauTau = config['hToTauTau'],
         monojet = config['monojet']
+    output:
+        datasets = 'output/datasets_{events}.npz',
+        bsm_datasets = 'output/bsm_datasets_{events}.npz',
+        pt_scaler = 'output/pt_scaler_{events}.pickle',
+        background_ids = 'output/background_IDs_{events}.npz'
     shell:
         'mkdir -p output; '
-        'python prepare_data.py {input.qcd} {output.datasets} {output.bsm_datasets} \
+        'python scripts/prepare_data.py {input.qcd} {output.datasets} {output.bsm_datasets} \
             {output.pt_scaler} {output.background_ids} \
             --events {wildcards.events} \
             --input-bsm leptoquark {params.leptoquarks} \
@@ -27,13 +27,32 @@ rule prepare_data:
             --input-bsm hChToTauNu {params.hChToTauNu} \
             --input-bsm hToTauTau {params.hToTauTau} '
 
+rule upload_data:
+    '''
+    Once the data is prepared, it is essential to have it uploaded
+    to a place where everyone can access it and some kind of
+    versioning should be enforced.
+    This is done for all the data (-1), but to play around locally,
+    you can use other number of events via events wildcard.
+    '''
+    input:
+        datasets = 'output/datasets_-1.npz',
+        bsm_datasets = 'output/bsm_datasets_-1.npz',
+        pt_scaler = 'output/pt_scaler_-1.pickle',
+        background_ids = 'output/background_IDs_-1.npz'
+    output:
+        directory(config['datasets_dir'])
+    shell:
+        'mkdir -p {output}'
+        'cp {input.datasets} {input.bsm_datasets} {input.pt_scaler} {input.background_ids} {output}'
+
 rule tune_teacher_kd_ae_l1:
     input:
-        data = expand(rules.prepare_data.output.datasets, events=-1)
+        expand(rules.prepare_data.output.datasets, events=-1)
     output:
         'output/big_teacher.h5'
     shell:
-        'python tune_teacher_hyperparameters.py {input.data} {output}'
+        'python scripts/tune_teacher_hyperparameters.py {input} {output}'
 
 rule run_tensorboard:
     params:
@@ -43,79 +62,79 @@ rule run_tensorboard:
 
 rule check_big_teacher_performance:
     input:
-        dataset = expand(config['dataset'], events=-1),
-        model_h5 = rules.tune_teacher_kd_ae_l1.output
+        dataset = 'output/datasets_-1.npz',
+        pt_scaler = 'output/pt_scaler_-1.pickle',
+        # model_h5 = rules.tune_teacher_kd_ae_l1.output
+        model_h5 = config['big_teacher_h5']
     params:
         leptoquarks = config['leptoquarks'],
         ato4l = config['ato4l'],
         hChToTauNu = config['hChToTauNu'],
         hToTauTau = config['hToTauTau'],
-        monojet = config['monojet']
+        plots = 'output/plots'
     shell:
-        'python check_ae_performance.py {input.dataset} \
+        'mkdir -p {params.plots}; '
+        'python scripts/check_ae_performance.py {input.dataset} \
             --pretrained-ae-h5 {input.model_h5} \
             --signal leptoquark {params.leptoquarks} \
             --signal ato4l {params.ato4l} \
             --signal hChToTauNu {params.hChToTauNu} \
             --signal hToTauTau {params.hToTauTau} \
-            --signal monojet {params.monojet} '
+            --pt-scaler {input.pt_scaler}'
 
 rule reformat_ae_l1_data:
+    '''
+    Prepare teacher loss that the student will regress
+    '''
     input:
-        data = expand(config['dataset'], events=-1),
-        teacher_h5 = rules.tune_teacher_kd_ae_l1.output
-    output:
-        train_loss = 'output/l1_ae_train_loss.h5',
-        test_loss = 'output/l1_ae_test_loss.h5',
-        val_loss = 'output/l1_ae_val_loss.h5',
-        signal_loss = 'output/l1_ae_signal_loss.h5'
+        data = 'output/datasets_-1.npz',
+        bsm = 'output/bsm_datasets_-1.npz',
+        pt_scaler = 'output/pt_scaler_-1.pickle',
+        # teacher_h5 = rules.tune_teacher_kd_ae_l1.output
+        teacher_h5 = config['big_teacher_h5']
     params:
         log_loss = True
+    output:
+        loss = 'output/l1_ae_loss.npz',
+        signal_loss = 'output/l1_ae_signal_loss.npz'
     shell:
-        'python reformat_ae_l1_data.py --data-file {input.data} \
-                                       --teacher-input-h5 {input.teacher_h5} \
-                                       --output-train-loss {output.train_loss} \
-                                       --output-test-loss {output.test_loss} \
-                                       --output-val-loss {output.val_loss} \
-                                       --output-signal-loss {output.signal_loss}\
-                                       --log-loss {params.log_loss}'
+        'python scripts/reformat_ae_l1_data.py {input.data} {input.bsm} {input.teacher_h5} \
+            --output-loss {output.loss} \
+            --output-signal-loss {output.signal_loss}\
+            --log-loss {params.log_loss} \
+            --pt-scaler {input.pt_scaler}'
 
 rule apply_selective_sampling:
     input:
-        data_bg = rules.reformat_ae_l1_data.output.train_loss,
+        data_bg = rules.reformat_ae_l1_data.output.loss,
         data_sig = rules.reformat_ae_l1_data.output.signal_loss
     params:
-        signal_name = '"A to 4 leptons"',
+        signal_name = 'ato4l',
         signal_fraction = 0.25,
         fit_threshold = 1.2,
-        plots = 'plots/selective_subsampling/'
+        plots = 'output/plots/selective_subsampling/'
     output:
-        train_loss_bg = 'output/l1_ae_train_loss_selective.h5',
-        train_loss_bg_sig = 'output/l1_ae_train_loss_selective_bg_plus_sig.h5',
-        discarded_test_loss = 'output/l1_ae_train_loss_discarded.h5',
-        signal_loss = 'output/l1_ae_signal_loss_selective.h5'
+        train_loss_bg = 'output/l1_ae_train_loss_selective.npz',
+        train_loss_bg_sig = 'output/l1_ae_train_loss_selective_bg_plus_sig.npz',
+        discarded_test_loss = 'output/l1_ae_train_loss_discarded.npz',
+        signal_loss = 'output/l1_ae_signal_loss_selective.npz'
     shell:
         'mkdir -p {params.plots};'
-        'python selective_sampling.py --data-file-bg {input.data_bg} \
-                                       --data-file-sig {input.data_sig} \
-                                       --signal-name {params.signal_name} \
-                                       --signal-fraction {params.signal_fraction} \
-                                       --fit-threshold {params.fit_threshold} \
-                                       --outfile-train-loss-bg {output.train_loss_bg} \
-                                       --outfile-train-loss-bg-sig {output.train_loss_bg_sig} \
-                                       --outfile-discarded-test-loss {output.discarded_test_loss} \
-                                       --outfile-signal-loss {output.signal_loss} \
-                                       --plot-dir {params.plots}'
+        'python scripts/selective_sampling.py {input.data_bg} {input.data_sig} \
+            --signal-name {params.signal_name} \
+            --signal-fraction {params.signal_fraction} \
+            --fit-threshold {params.fit_threshold} \
+            --outfile-train-loss-bg {output.train_loss_bg} \
+            --outfile-train-loss-bg-sig {output.train_loss_bg_sig} \
+            --outfile-discarded-test-loss {output.discarded_test_loss} \
+            --outfile-signal-loss {output.signal_loss} \
+            --plot-dir {params.plots}'
 
 rule kd_ae_l1_train:
     input:
-        train = rules.reformat_ae_l1_data.output.train_loss,
-        test = rules.reformat_ae_l1_data.output.test_loss,
-        val = rules.reformat_ae_l1_data.output.val_loss,
+        train = rules.reformat_ae_l1_data.output.loss,
         signal = rules.reformat_ae_l1_data.output.signal_loss
     params:
-        data_name = 'data',
-        loss_name = 'teacher_loss',
         distillation_loss = 'mae',
         node_size = 32,
         n_features = 3,
@@ -130,198 +149,189 @@ rule kd_ae_l1_train:
         result = 'output/student_result-q{quant_size}.h5'
     shell:
         'mkdir -p {params.plots};'
-        'python knowledge_distillation.py --input-train-file {input.train} \
-                                          --input-test-file {input.test} \
-                                          --input-val-file {input.val} \
-                                          --input-signal-file {input.signal} \
-                                          --data-name {params.data_name} \
-                                          --n-features {params.n_features} \
-                                          --teacher-loss_name {params.loss_name} \
-                                          --output-model-h5 {output.h5} \
-                                          --output-model-json {output.json} \
-                                          --node-size {params.node_size} \
-                                          --batch-size {params.batch_size} \
-                                          --n-epochs {params.n_epochs} \
-                                          --distillation-loss {params.distillation_loss} \
-                                          --quant-size {wildcards.quant_size} \
-                                          --output-result {output.result} \
-                                          --output-dir {params.plots} \
-                                          --particles-shuffle-strategy {params.shuffle_strategy} \
-                                          --particles-shuffle-during  {params.shuffle_during} '
+        'python scripts/knowledge_distillation.py {input.train} {input.signal} \
+            --n-features {params.n_features} \
+            --output-model-h5 {output.h5} \
+            --output-model-json {output.json} \
+            --node-size {params.node_size} \
+            --batch-size {params.batch_size} \
+            --n-epochs {params.n_epochs} \
+            --distillation-loss {params.distillation_loss} \
+            --quant-size {wildcards.quant_size} \
+            --output-result {output.result} \
+            --output-dir {params.plots} \
+            --particles-shuffle-strategy {params.shuffle_strategy} \
+            --particles-shuffle-during  {params.shuffle_during} '
 
 rule kd_ae_l1_plot:
     input:
         student = expand(rules.kd_ae_l1_train.output.result,
                          quant_size='{quant_size}'),
-        teacher = rules.reformat_ae_l1_data.output.test_loss,
+        teacher = rules.reformat_ae_l1_data.output.loss,
         signal = rules.reformat_ae_l1_data.output.signal_loss
-    params:
-        loss_name = 'teacher_loss',
     output:
         plots = directory('plots-ae-l1-q{quant_size}/')
     shell:
         'mkdir -p {output.plots};'
-        'python plot_results.py --student {input.student} \
-                                --teacher {input.teacher} \
-                                --teacher-loss-name {params.loss_name} \
-                                --output-dir {output.plots} \
-                                --signal {input.signal}'
+        'python scripts/plot_results.py {input.student} {input.teacher} \
+            --output-dir {output.plots} \
+            --signal {input.signal}'
 
-rule quantized_kd_ae_l1_plot:
-    ''' Specify to which bit to quantize the student
-        use 0 for full precision
-    '''
-    input:
-        expand(rules.kd_ae_l1_plot.output, quant_size=0)
+# rule quantized_kd_ae_l1_plot:
+#     ''' Specify to which bit to quantize the student
+#         use 0 for full precision
+#     '''
+#     input:
+#         expand(rules.kd_ae_l1_plot.output, quant_size=0)
 
-rule tune_student_kd_ae_l1:
-    input:
-        data = rules.reformat_ae_l1_data.output.train_loss
-    params:
-        distillation_loss = 'mae',
-    output:
-    shell:
-        'python tune_student_hyperparameters.py --input-file {input.data} \
-                                        --distillation-loss {params.distillation_loss} '
+# rule tune_student_kd_ae_l1:
+#     input:
+#         data = rules.reformat_ae_l1_data.output.train_loss
+#     params:
+#         distillation_loss = 'mae',
+#     output:
+#     shell:
+#         'python scripts/tune_student_hyperparameters.py --input-file {input.data} \
+#                                         --distillation-loss {params.distillation_loss} '
 
-rule kd_graph_train:
-    input:
-        train = config['train'],
-        test = config['test'],
-        signal = config['signal']
-    params:
-        data_name = 'InputParticlesOriginal',
-        loss_name = 'loss_pid',  # loss_all_reco_chamfer
-        distillation_loss = 'mse',
-        n_features = 3,
-        plots = 'plots/graph/',
-        shuffle_strategy = 'shuffle_within_between_pid',
-        shuffle_during = 'train_predict'
-    output:
-        h5 = "output/graph_student_model.h5",
-        json = "output/graph_student_model.json",
-        result = "output/graph_student_result.h5"
-    shell:
-        'mkdir -p {params.plots};'
-        'python knowledge_distillation.py --input-train-file {input.train} \
-                                          --input-test-file {input.test} \
-                                          --input-signal-file {input.signal} \
-                                          --data-name {params.data_name} \
-                                          --n-features {params.n_features} \
-                                          --teacher-loss_name {params.loss_name} \
-                                          --output-model-h5 {output.h5} \
-                                          --output-model-json {output.json} \
-                                          --batch-size 256 \
-                                          --n-epochs 100 \
-                                          --distillation-loss {params.distillation_loss}\
-                                          --output-result {output.result} \
-                                          --output-dir {params.plots} \
-                                          --particles-shuffle-strategy {params.shuffle_strategy} \
-                                          --particles-shuffle-during  {params.shuffle_during} '
+# rule kd_graph_train:
+#     input:
+#         train = config['train'],
+#         test = config['test'],
+#         signal = config['signal']
+#     params:
+#         data_name = 'InputParticlesOriginal',
+#         loss_name = 'loss_pid',  # loss_all_reco_chamfer
+#         distillation_loss = 'mse',
+#         n_features = 3,
+#         plots = 'plots/graph/',
+#         shuffle_strategy = 'shuffle_within_between_pid',
+#         shuffle_during = 'train_predict'
+#     output:
+#         h5 = "output/graph_student_model.h5",
+#         json = "output/graph_student_model.json",
+#         result = "output/graph_student_result.h5"
+#     shell:
+#         'mkdir -p {params.plots};'
+#         'python scripts/knowledge_distillation.py --input-train-file {input.train} \
+#                                           --input-test-file {input.test} \
+#                                           --input-signal-file {input.signal} \
+#                                           --data-name {params.data_name} \
+#                                           --n-features {params.n_features} \
+#                                           --teacher-loss_name {params.loss_name} \
+#                                           --output-model-h5 {output.h5} \
+#                                           --output-model-json {output.json} \
+#                                           --batch-size 256 \
+#                                           --n-epochs 100 \
+#                                           --distillation-loss {params.distillation_loss}\
+#                                           --output-result {output.result} \
+#                                           --output-dir {params.plots} \
+#                                           --particles-shuffle-strategy {params.shuffle_strategy} \
+#                                           --particles-shuffle-during  {params.shuffle_during} '
 
-rule kd_graph_plot:
-    input:
-        student = rules.kd_graph_train.output.result,
-        signal = config['signal'],
-        teacher = config['test']
-    params:
-        loss_name = 'loss_pid',
-        plots = "plots/graph/"
-    shell:
-        'mkdir -p {params.plots};'
-        'python plot_results.py --student {input.student} \
-                                --teacher {input.teacher} \
-                                --teacher-loss-name {params.loss_name} \
-                                --output-dir {params.plots} \
-                                --signal {input.signal}'
+# rule kd_graph_plot:
+#     input:
+#         student = rules.kd_graph_train.output.result,
+#         signal = config['signal'],
+#         teacher = config['test']
+#     params:
+#         loss_name = 'loss_pid',
+#         plots = "plots/graph/"
+#     shell:
+#         'mkdir -p {params.plots};'
+#         'python scripts/plot_results.py --student {input.student} \
+#                                 --teacher {input.teacher} \
+#                                 --teacher-loss-name {params.loss_name} \
+#                                 --output-dir {params.plots} \
+#                                 --signal {input.signal}'
 
 
-rule co_train:
-    input:
-        data = config['dataset'],
-    params:
-        dir = 'cotrain/'
-    shell:
-        'mkdir -p cotrain;'
-        'python co_train.py --data-file {input.data} \
-                            --output-dir {params.dir}'
+# rule co_train:
+#     input:
+#         data = config['dataset'],
+#     params:
+#         dir = 'cotrain/'
+#     shell:
+#         'mkdir -p cotrain;'
+#         'python scripts/co_train.py --data-file {input.data} \
+#                             --output-dir {params.dir}'
 
 
-rule co_train_results:
-    input:
-        data = config['dataset'],
-    params:
-        train_loss = 'cotrain/l1_ae_train_loss.h5',
-        test_loss = 'cotrain/l1_ae_test_loss.h5',
-        signal_loss = 'cotrain/l1_ae_signal_loss.h5',
-        result = 'cotrain/student_result.h5',
-        dir = 'cotrain/'
-    shell:
-        'mkdir -p cotrain;'
-        'python co_train_results.py --data-file {input.data} \
-                            --teacher-output-train-loss {params.train_loss} \
-                            --teacher-output-test-loss {params.test_loss} \
-                            --teacher-output-signal-loss {params.signal_loss}\
-                            --student-output-result {params.result}\
-                            --output-dir {params.dir}'
+# rule co_train_results:
+#     input:
+#         data = config['dataset'],
+#     params:
+#         train_loss = 'cotrain/l1_ae_train_loss.h5',
+#         test_loss = 'cotrain/l1_ae_test_loss.h5',
+#         signal_loss = 'cotrain/l1_ae_signal_loss.h5',
+#         result = 'cotrain/student_result.h5',
+#         dir = 'cotrain/'
+#     shell:
+#         'mkdir -p cotrain;'
+#         'python scripts/co_train_results.py --data-file {input.data} \
+#                             --teacher-output-train-loss {params.train_loss} \
+#                             --teacher-output-test-loss {params.test_loss} \
+#                             --teacher-output-signal-loss {params.signal_loss}\
+#                             --student-output-result {params.result}\
+#                             --output-dir {params.dir}'
 
-rule co_train_plot:
-    input:
-        student = rules.co_train_results.params.result,
-        teacher = rules.co_train_results.params.test_loss,
-        signal = rules.co_train_results.params.signal_loss
-    params:
-        loss_name = 'teacher_loss',
-        plots = 'plots/cotrain/'
-    shell:
-        'mkdir -p {params.plots};'
-        'python plot_results.py --student {input.student} \
-                                --teacher {input.teacher} \
-                                --teacher-loss-name {params.loss_name} \
-                                --output-dir {params.plots} \
-                                --signal {input.signal}'
+# rule co_train_plot:
+#     input:
+#         student = rules.co_train_results.params.result,
+#         teacher = rules.co_train_results.params.test_loss,
+#         signal = rules.co_train_results.params.signal_loss
+#     params:
+#         loss_name = 'teacher_loss',
+#         plots = 'plots/cotrain/'
+#     shell:
+#         'mkdir -p {params.plots};'
+#         'python scripts/plot_results.py --student {input.student} \
+#                                 --teacher {input.teacher} \
+#                                 --teacher-loss-name {params.loss_name} \
+#                                 --output-dir {params.plots} \
+#                                 --signal {input.signal}'
 
-rule co_train_latent:
-    input:
-        data = config['dataset'],
-    params:
-        dir = 'cotrain_latent/'
-    shell:
-        'mkdir -p cotrain_latent;'
-        'python co_train.py --data-file {input.data} \
-                            --output-dir {params.dir}\
-                            --include-latent-loss True'
+# rule co_train_latent:
+#     input:
+#         data = config['dataset'],
+#     params:
+#         dir = 'cotrain_latent/'
+#     shell:
+#         'mkdir -p cotrain_latent;'
+#         'python scripts/co_train.py --data-file {input.data} \
+#                             --output-dir {params.dir}\
+#                             --include-latent-loss True'
 
-rule co_train_latent_results:
-    input:
-        data = config['dataset'],
-    params:
-        train_loss = 'cotrain_latent/l1_ae_train_loss.h5',
-        test_loss = 'cotrain_latent/l1_ae_test_loss.h5',
-        signal_loss = 'cotrain_latent/l1_ae_signal_loss.h5',
-        result = 'cotrain_latent/student_result.h5',
-        dir = 'cotrain_latent/'
-    shell:
-        'mkdir -p cotrain_latent;'
-        'python co_train_results.py --data-file {input.data} \
-                            --teacher-output-train-loss {params.train_loss} \
-                            --teacher-output-test-loss {params.test_loss} \
-                            --teacher-output-signal-loss {params.signal_loss}\
-                            --student-output-result {params.result}\
-                            --output-dir {params.dir}'
+# rule co_train_latent_results:
+#     input:
+#         data = config['dataset'],
+#     params:
+#         train_loss = 'cotrain_latent/l1_ae_train_loss.h5',
+#         test_loss = 'cotrain_latent/l1_ae_test_loss.h5',
+#         signal_loss = 'cotrain_latent/l1_ae_signal_loss.h5',
+#         result = 'cotrain_latent/student_result.h5',
+#         dir = 'cotrain_latent/'
+#     shell:
+#         'mkdir -p cotrain_latent;'
+#         'python scripts/co_train_results.py --data-file {input.data} \
+#                             --teacher-output-train-loss {params.train_loss} \
+#                             --teacher-output-test-loss {params.test_loss} \
+#                             --teacher-output-signal-loss {params.signal_loss}\
+#                             --student-output-result {params.result}\
+#                             --output-dir {params.dir}'
 
-rule co_train_latent_plot:
-    input:
-        student = rules.co_train_latent_results.params.result,
-        teacher = rules.co_train_latent_results.params.test_loss,
-        signal = rules.co_train_latent_results.params.signal_loss
-    params:
-        loss_name = 'teacher_loss',
-        plots = 'plots/cotrain_latent/'
-    shell:
-        'mkdir -p {params.plots};'
-        'python plot_results.py --student {input.student} \
-                                --teacher {input.teacher} \
-                                --teacher-loss-name {params.loss_name} \
-                                --output-dir {params.plots} \
-                                --signal {input.signal}'
+# rule co_train_latent_plot:
+#     input:
+#         student = rules.co_train_latent_results.params.result,
+#         teacher = rules.co_train_latent_results.params.test_loss,
+#         signal = rules.co_train_latent_results.params.signal_loss
+#     params:
+#         loss_name = 'teacher_loss',
+#         plots = 'plots/cotrain_latent/'
+#     shell:
+#         'mkdir -p {params.plots};'
+#         'python scripts/plot_results.py --student {input.student} \
+#                                 --teacher {input.teacher} \
+#                                 --teacher-loss-name {params.loss_name} \
+#                                 --output-dir {params.plots} \
+#                                 --signal {input.signal}'
