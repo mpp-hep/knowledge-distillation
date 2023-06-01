@@ -135,3 +135,7 @@ autoencoders/output
 *.snakemake*
 *DS_Store
 hyper_tuning/
+*.pdf
+*.h5
+*.csv
+*HLS*
