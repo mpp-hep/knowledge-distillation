@@ -215,6 +215,14 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
 
     x = AveragePooling2D(pool_size=(3, 1))(x)
     #
+    x = Conv2D(32, kernel_size=(1,1), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    x = AveragePooling2D(pool_size=(2, 1))(x)
+    #
     x = Flatten()(x)
     #
     enc = Dense(latent_dim)(x) if quant_size==0 \
@@ -226,11 +234,20 @@ def teacher_model(image_shape, latent_dim, quant_size=0, pruning='not_pruned', e
     encoder.summary()
     # decoder
     input_decoder = Input(shape=(latent_dim,), name='decoder_input')
-    x = Dense(64)(input_decoder) if quant_size==0 \
+    x = Dense(32)(input_decoder) if quant_size==0 \
         else QDense(64,
                kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)',
                bias_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(input_decoder)
     #
+    x = Activation('relu')(x) if quant_size==0 \
+        else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
+
+    #
+    x = Reshape((2,1,16))(x)
+    #
+    x = Conv2D(32, kernel_size=(3,1), use_bias=False, padding='same')(x) if quant_size==0 \
+        else QConv2D(32, kernel_size=(3,1), use_bias=False, padding='same',
+                         kernel_quantizer=f'quantized_bits({quant_size},{int_size},0,alpha=1)')(x)
     x = Activation('relu')(x) if quant_size==0 \
         else QActivation(f'quantized_relu({quant_size},{int_size},0)')(x)
     #

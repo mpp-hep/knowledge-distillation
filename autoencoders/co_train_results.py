@@ -8,13 +8,13 @@ from tensorflow.keras.callbacks import (
     ReduceLROnPlateau
     )
 import pickle
-import setGPU
+#import setGPU
 from sklearn.model_selection import train_test_split
 import math
 import matplotlib.pyplot as plt
 from models import student, teacher
 from plot_results import BSM_SAMPLES
-
+#os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 ## just for testing things
 config = {
     'learning_rate': 3e-3,
@@ -26,7 +26,7 @@ config = {
     'particles_shuffle_during': 'never',
     'batch_size': 1024
 }
-
+os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
 idx_met_0,idx_met_1=0,1
 idx_eg_0,idx_eg_1=1,5
 idx_mu_0,idx_mu_1=5,9
@@ -131,11 +131,14 @@ def teacher_student_cotrain(data_file,
     
     teacher_model.load_weights(f'{output_dir}teacher_ckpt/teacher_ckpt')
     student_model.load_weights(f'{output_dir}student_ckpt/student_ckpt')
-    
+    print("Loaded weights")
     # prediction on training data
-    _, predicted_loss = student_model.predict(x_train,batch_size=config['batch_size'])
-    _, predicted_reco = teacher_model.predict(x_train,batch_size=config['batch_size'])
+    _, predicted_loss = student_model.predict(x_train,batch_size=config['batch_size'],verbose=1)
+    print("student predicted")
+    _, predicted_reco = teacher_model.predict(x_train,batch_size=config['batch_size'],verbose=1)
+    print("teacher predicted")
     _, actual_loss = teacher_loss(y_train, predicted_reco)
+    print("actual loss")
     print(actual_loss.shape)
     print(actual_loss)
     print(predicted_loss.shape)

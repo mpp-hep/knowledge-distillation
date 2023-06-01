@@ -19,7 +19,7 @@ from tensorflow.keras.callbacks import (
 
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
-
+import math
 from qkeras.utils import load_qmodel
 from qkeras.qlayers import QDense, QActivation
 from qkeras.quantizers import quantized_bits, quantized_relu

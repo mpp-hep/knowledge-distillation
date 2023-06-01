@@ -14,7 +14,7 @@ import math
 import matplotlib.pyplot as plt
 from models import student, teacher
 from plot_results import BSM_SAMPLES
-
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 ## just for testing things
 config = {
     'learning_rate': 3e-3,
@@ -213,7 +213,7 @@ def teacher_student_cotrain(data_file,
     callbacks_t.on_train_begin(logs=logs_t)
     state_accumulator = []
     
-    for epoch in range(30):
+    for epoch in range(10):
         print(f'starting train epoch ... {epoch}')
         # Training loop
         train_epoch_tloss_avg = tf.keras.metrics.Mean()
